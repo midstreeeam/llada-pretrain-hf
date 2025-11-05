@@ -212,6 +212,7 @@ class GenerationPreviewCallback(TrainerCallback):
         decode_top_k: int,
         mask_token_id: Optional[int],
         debug_generation: bool,
+        preview_log_path: Optional[str] = None,
     ) -> None:
         self.tokenizer = tokenizer
         self.prompts = prompts
@@ -227,6 +228,7 @@ class GenerationPreviewCallback(TrainerCallback):
         self.mask_token_id = mask_token_id
         self.trainer = None
         self.debug_generation = debug_generation
+        self.preview_log_path = preview_log_path
 
         encoded = tokenizer(
             prompts,
@@ -286,6 +288,7 @@ class GenerationPreviewCallback(TrainerCallback):
 
         logger.info("=" * 60)
         logger.info("📝 Generation preview at step %s", state.global_step)
+        preview_records = []
         for idx, prompt in enumerate(self.prompts):
             prompt_len = int(self.prompt_lengths[idx].item())
             full_prompt_ids = input_ids_cpu[idx, :prompt_len]
@@ -337,7 +340,23 @@ class GenerationPreviewCallback(TrainerCallback):
             logger.info("[gen] prompt[%d] Generated: %s", idx, generated_text if generated_text else "[empty]")
             logger.info("[gen] prompt[%d] tokens: %s", idx, token_trace if token_trace else "[empty]")
             logger.info("-" * 40)
+            preview_records.append(
+                {
+                    "timestamp": datetime.utcnow().isoformat(),
+                    "type": "generation_preview",
+                    "step": int(state.global_step),
+                    "prompt_index": idx,
+                    "prompt": prompt,
+                    "generated_text": generated_text,
+                    "token_trace": token_trace,
+                }
+            )
         logger.info("=" * 60)
+
+        if self.preview_log_path and preview_records:
+            with open(self.preview_log_path, "a", encoding="utf-8") as f:
+                for record in preview_records:
+                    f.write(json.dumps(record, ensure_ascii=False) + "\n")
 
     def on_train_begin(self, args, state, control, **kwargs):
         trainer = kwargs.get("trainer")
@@ -356,6 +375,37 @@ class GenerationPreviewCallback(TrainerCallback):
         if not self._should_generate(state):
             return control
         self._run_generation(trainer, trainer.model, state)
+        return control
+
+
+class MetricsLoggerCallback(TrainerCallback):
+    """Persist raw metrics emitted by Trainer into a jsonl file."""
+
+    def __init__(self, log_path: str) -> None:
+        self.log_path = log_path
+
+    def on_log(self, args, state, control, logs=None, **kwargs):
+        if logs is None or not state.is_local_process_zero:
+            return control
+
+        record = {
+            "timestamp": datetime.utcnow().isoformat(),
+            "type": "metrics",
+            "step": int(state.global_step),
+            "epoch": float(state.epoch) if state.epoch is not None else None,
+            "logs": logs,
+        }
+
+        scalar_items = [
+            f"{key}={value:.4f}" if isinstance(value, (float, int)) else f"{key}={value}"
+            for key, value in logs.items()
+        ]
+        if scalar_items:
+            logging.info("[metrics] step %s %s", state.global_step, ", ".join(scalar_items))
+
+        with open(self.log_path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(record, ensure_ascii=False) + "\n")
+
         return control
 
 
@@ -449,7 +499,15 @@ def main():
         hf_logging.enable_default_handler()
         hf_logging.enable_explicit_format()
         hf_logging.set_verbosity_info()
+        hf_logging.disable_progress_bar()
         logging.info("日志将写入: %s", log_file)
+
+    metrics_log_path = os.path.join(log_dir, "metrics.jsonl")
+    generation_log_path = os.path.join(log_dir, "generation.jsonl")
+    open(metrics_log_path, "a", encoding="utf-8").close()
+    open(generation_log_path, "a", encoding="utf-8").close()
+    logging.info("指标将写入: %s", metrics_log_path)
+    logging.info("示例生成将写入: %s", generation_log_path)
 
     # --- 2. 打印和保存参数配置 ---
     # 只在主进程打印和保存参数配置
@@ -552,9 +610,7 @@ def main():
         ddp_find_unused_parameters=False,
         # eval_on_start = True,
     )
-
-
-    callbacks = []
+    callbacks = [MetricsLoggerCallback(metrics_log_path)]
     if args.generation_interval > 0:
         if tokenizer.mask_token_id is None:
             logging.warning("Tokenizer 缺少 mask_token，无法执行文本生成预览，将跳过此功能。")
@@ -583,6 +639,7 @@ def main():
                     decode_top_k=args.generation_decode_top_k,
                     mask_token_id=tokenizer.mask_token_id,
                     debug_generation=args.generation_debug,
+                    preview_log_path=generation_log_path,
                 )
             )
 
