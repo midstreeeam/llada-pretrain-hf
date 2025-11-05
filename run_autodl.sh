@@ -104,7 +104,6 @@ echo "========================================="
 echo ""
 
 set +e
-{
 python3 "${REPO_DIR}/main.py" \
     --model_name_or_path "${MODEL_PATH}" \
     --dataset_name "${DATASET_NAME}" \
@@ -138,8 +137,7 @@ python3 "${REPO_DIR}/main.py" \
     --generation_prompts "Once upon a time, a curious child asked:" "In a quiet village by the sea," \
     ${GENERATION_DO_SAMPLE_FLAG} \
     ${GENERATION_DEBUG_FLAG}
-} 2>&1 | tee "${LOG_FILE}"
-exit_code=${PIPESTATUS[0]}
+exit_code=$?
 set -e
 
 if (( exit_code != 0 )); then
