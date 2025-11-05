@@ -16,6 +16,7 @@ from transformers import (
     TrainingArguments,
 )
 from transformers.trainer_callback import TrainerCallback
+from transformers.utils import logging as hf_logging
 import math
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parent
@@ -436,12 +437,18 @@ def main():
     log_file = os.path.join(log_dir, f"train_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.log")
 
     root_logger = logging.getLogger()
-    existing_files = [h for h in root_logger.handlers if isinstance(h, logging.FileHandler)]
-    if not existing_files:
+    file_handler = getattr(root_logger, "_llada_file_handler", None)
+    if file_handler is None:
         file_handler = logging.FileHandler(log_file, encoding="utf-8")
         formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
         file_handler.setFormatter(formatter)
         root_logger.addHandler(file_handler)
+        root_logger._llada_file_handler = file_handler  # type: ignore[attr-defined]
+
+        hf_logging.add_handler(file_handler)
+        hf_logging.enable_default_handler()
+        hf_logging.enable_explicit_format()
+        hf_logging.set_verbosity_info()
         logging.info("日志将写入: %s", log_file)
 
     # --- 2. 打印和保存参数配置 ---
