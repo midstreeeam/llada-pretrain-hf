@@ -169,6 +169,23 @@ def wikipedia(local_path):
             return datasets.load_from_disk(local_path)
         except Exception as e:
             print(f"本地加载失败: {e}, 尝试远程加载")
-    
+
     print("从远程加载数据集 'wikipedia'")
     return datasets.load_dataset("wikipedia", "20220301.en")
+
+@register_dataset()
+def tinystories(local_path):
+    """加载 TinyStories 数据集"""
+    if local_path is not None and os.path.exists(local_path):
+        print(f"从本地路径加载数据集 'tinystories': {local_path}")
+        try:
+            dataset = datasets.load_from_disk(local_path)
+        except Exception as e:
+            print(f"本地加载失败: {e}, 尝试远程加载")
+            dataset = datasets.load_dataset("roneneldan/TinyStories", num_proc=64)['train']
+    else:
+        print("从远程加载数据集 'tinystories': roneneldan/TinyStories")
+        dataset = datasets.load_dataset("roneneldan/TinyStories", num_proc=64)['train']
+
+    # TinyStories already has 'text' field, no need to rename
+    return dataset

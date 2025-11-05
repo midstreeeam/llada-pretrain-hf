@@ -5,3 +5,8 @@ modeling_niu*.py
 __pycache__/
 modernbert*.json
 *.zip
+
+.venv
+.claude
+
+output/

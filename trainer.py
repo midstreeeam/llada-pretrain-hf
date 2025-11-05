@@ -92,7 +92,6 @@ from transformers.trainer_pt_utils import (
     nested_xla_mesh_reduce,
     reissue_pt_warnings,
     remove_dummy_checkpoint,
-    set_rng_state_for_device,
 )
 from transformers.trainer_utils import (
     PREFIX_CHECKPOINT_DIR,
@@ -103,7 +102,6 @@ from transformers.trainer_utils import (
     HubStrategy,
     PredictionOutput,
     RemoveColumnsCollator,
-    SaveStrategy,
     TrainerMemoryTracker,
     TrainOutput,
     check_target_module_exists,
@@ -119,6 +117,16 @@ from transformers.trainer_utils import (
     set_seed,
     speed_metrics,
 )
+try:
+    from transformers.trainer_utils import SaveStrategy
+except ImportError:  # transformers>=4.46 removed SaveStrategy
+    from enum import Enum
+
+    class SaveStrategy(str, Enum):
+        NO = "no"
+        STEPS = "steps"
+        EPOCH = "epoch"
+        BEST = "best"
 from transformers.training_args import OptimizerNames, ParallelMode, TrainingArguments
 from transformers.utils import (
     ADAPTER_CONFIG_NAME,
@@ -133,10 +141,8 @@ from transformers.utils import (
     PushInProgress,
     PushToHubMixin,
     can_return_loss,
-    check_torch_load_is_safe,
     find_labels,
     is_accelerate_available,
-    is_apollo_torch_available,
     is_bitsandbytes_available,
     is_datasets_available,
     is_galore_torch_available,
@@ -149,7 +155,6 @@ from transformers.utils import (
     is_sagemaker_dp_enabled,
     is_sagemaker_mp_enabled,
     is_schedulefree_available,
-    is_torch_hpu_available,
     is_torch_mlu_available,
     is_torch_mps_available,
     is_torch_musa_available,
@@ -161,8 +166,22 @@ from transformers.utils import (
     logging,
     strtobool,
 )
+try:
+    from transformers.utils import is_apollo_torch_available
+except ImportError:  # removed in newer transformers
+    def is_apollo_torch_available() -> bool:
+        return False
+
+try:
+    from transformers.utils import is_torch_hpu_available
+except ImportError:  # removed in newer transformers
+    def is_torch_hpu_available() -> bool:
+        return False
 from transformers.utils.deprecation import deprecate_kwarg
-from transformers.utils.import_utils import requires
+try:
+    from transformers.utils.import_utils import requires
+except ImportError:  # transformers>=4.46 switched to requires_backends
+    from transformers.utils.import_utils import requires_backends as requires
 from transformers.utils.quantization_config import QuantizationMethod
 
 
