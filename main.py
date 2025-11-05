@@ -5,6 +5,7 @@ import os
 import pathlib
 import sys
 from typing import List, Optional
+from datetime import datetime
 
 import torch
 import torch.multiprocessing as mp
@@ -428,6 +429,20 @@ def main():
                         help="在示例生成时输出扩散每一步的详细变化。")
 
     args = parser.parse_args()
+
+    # Configure file logging once output directory is known.
+    log_dir = os.path.join(args.output_dir, "logs")
+    os.makedirs(log_dir, exist_ok=True)
+    log_file = os.path.join(log_dir, f"train_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.log")
+
+    root_logger = logging.getLogger()
+    existing_files = [h for h in root_logger.handlers if isinstance(h, logging.FileHandler)]
+    if not existing_files:
+        file_handler = logging.FileHandler(log_file, encoding="utf-8")
+        formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+        file_handler.setFormatter(formatter)
+        root_logger.addHandler(file_handler)
+        logging.info("日志将写入: %s", log_file)
 
     # --- 2. 打印和保存参数配置 ---
     # 只在主进程打印和保存参数配置
