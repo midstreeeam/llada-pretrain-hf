@@ -2,7 +2,7 @@
 
 # Prevent sourcing: run as an executable script so shell options don't leak.
 if [[ "${BASH_SOURCE[0]}" != "$0" ]]; then
-  echo "[error] Please run this script instead of sourcing it: bash run.sh" >&2
+  echo "[error] Please run this script instead of sourcing it: bash run_autodl.sh" >&2
   return 1
 fi
 
@@ -19,6 +19,22 @@ else
   echo "[warn] No virtual environment at ${REPO_DIR}/.venv; falling back to current interpreter."
 fi
 
+# ===== AUTODL MIRROR CONFIGURATION =====
+# Hugging Face mirror (autodl provides hf-mirror.com)
+HF_MIRROR_URL="${HF_MIRROR_URL:-https://hf-mirror.com}"
+export HF_ENDPOINT="${HF_ENDPOINT:-${HF_MIRROR_URL}}"
+
+# Cache locations (default under repo to avoid root permissions issues)
+HF_CACHE_ROOT="${HF_CACHE_ROOT:-${REPO_DIR}/hf_cache}"
+export HF_HOME="${HF_HOME:-${HF_CACHE_ROOT}}"
+export TRANSFORMERS_CACHE="${TRANSFORMERS_CACHE:-${HF_CACHE_ROOT}/transformers}"
+export HF_DATASETS_CACHE="${HF_DATASETS_CACHE:-${HF_CACHE_ROOT}/datasets}"
+export HUGGINGFACE_HUB_CACHE="${HUGGINGFACE_HUB_CACHE:-${HF_CACHE_ROOT}/hub}"
+mkdir -p "${TRANSFORMERS_CACHE}" "${HF_DATASETS_CACHE}" "${HUGGINGFACE_HUB_CACHE}"
+
+# Optional: use a PyPI mirror if not already configured (Autodl usually benefits from Tsinghua mirror)
+export PIP_INDEX_URL="${PIP_INDEX_URL:-https://pypi.tuna.tsinghua.edu.cn/simple}"
+
 # ===== CONFIGURATION =====
 MODEL_PATH="${MODEL_PATH:-answerdotai/ModernBERT-base}"
 DATASET_NAME="${DATASET_NAME:-tinystories}"
@@ -29,9 +45,9 @@ MODE="${MODE:-llada}"
 # ===== HYPERPARAMETERS =====
 EPOCHS="${EPOCHS:-3}"
 LEARNING_RATE="${LEARNING_RATE:-3e-4}"
-BATCH_SIZE="${BATCH_SIZE:-8}"
-GRAD_ACCUM_STEPS="${GRAD_ACCUM_STEPS:-2}"
-MAX_LENGTH="${MAX_LENGTH:-256}"
+BATCH_SIZE="${BATCH_SIZE:-32}"
+GRAD_ACCUM_STEPS="${GRAD_ACCUM_STEPS:-1}"
+MAX_LENGTH="${MAX_LENGTH:-512}"
 MLM_SCHEDULE_TYPE="${MLM_SCHEDULE_TYPE:-cosine}"
 MLM_PROB_START="${MLM_PROB_START:-0.3}"
 MLM_PROB_END="${MLM_PROB_END:-0.15}"
@@ -42,18 +58,22 @@ EVAL_STEPS="${EVAL_STEPS:-1000}"
 SAVE_TOTAL_LIMIT="${SAVE_TOTAL_LIMIT:-3}"
 SEED="${SEED:-42}"
 NUM_WORKERS="${NUM_WORKERS:-1}"
+
+# Generation preview settings
 GENERATION_INTERVAL="${GENERATION_INTERVAL:-2000}"
 GENERATION_MAX_NEW_TOKENS="${GENERATION_MAX_NEW_TOKENS:-64}"
 GENERATION_DIFFUSION_STEPS="${GENERATION_DIFFUSION_STEPS:-16}"
 GENERATION_TEMPERATURE="${GENERATION_TEMPERATURE:-1.0}"
 GENERATION_BLOCK_SIZE="${GENERATION_BLOCK_SIZE:-8}"
 GENERATION_DECODE_TOP_K="${GENERATION_DECODE_TOP_K:-0}"
+
 GENERATION_DO_SAMPLE_FLAG=""
 case "${GENERATION_DO_SAMPLE:-}" in
   1|true|TRUE|True|yes|YES|on|ON)
     GENERATION_DO_SAMPLE_FLAG="--generation_do_sample"
     ;;
 esac
+
 GENERATION_DEBUG_FLAG=""
 case "${GENERATION_DEBUG:-}" in
   1|true|TRUE|True|yes|YES|on|ON)
@@ -68,7 +88,7 @@ mkdir -p "${OUTPUT_DIR}"
 EFFECTIVE_BATCH=$((BATCH_SIZE * GRAD_ACCUM_STEPS))
 
 echo "========================================="
-echo "LLaDA 100M Training on TinyStories"
+echo "LLaDA 100M Training on TinyStories (AutoDL)"
 echo "========================================="
 echo "Model path: ${MODEL_PATH}"
 echo "Model config: ${CONFIG_PATH}"
@@ -76,6 +96,7 @@ echo "Dataset: ${DATASET_NAME}"
 echo "Output directory: ${OUTPUT_DIR}"
 echo "Mode: ${MODE}"
 echo "Effective batch size: ${EFFECTIVE_BATCH} per GPU"
+echo "HF mirror: ${HF_ENDPOINT}"
 echo "========================================="
 echo ""
 
