@@ -39,6 +39,7 @@ main_args:
   generation_prompts:
     - "Once upon a time, a curious child asked:"
     - "In a quiet village by the sea,"
+  resume_from_checkpoint: null
 
 flags:
   - bf16

@@ -18,7 +18,7 @@ main_args:
   mlm_schedule_type: cosine
   warmup_ratio: 0.05
   logging_steps: 25
-  save_steps: 20000
+  save_steps: 200
   eval_steps: 100
   save_total_limit: 3
   seed: 42
@@ -33,6 +33,7 @@ main_args:
   generation_prompts:
     - "Once upon a time, a curious child asked:"
     - "In a quiet village by the sea,"
+  resume_from_checkpoint: "{repo_dir}/output/llada_100m_tinystories/checkpoint-200"
 
 flags:
   - bf16

@@ -226,6 +226,12 @@ def main():
                         help="每步最多解码的 token 数量，0 表示不额外限制。")
     parser.add_argument("--generation_debug", action="store_true",
                         help="在示例生成时输出扩散每一步的详细变化。")
+    parser.add_argument(
+        "--resume_from_checkpoint",
+        type=str,
+        default=None,
+        help="从指定 checkpoint 继续训练。若未指定则在输出目录内自动搜索。",
+    )
 
     args = parser.parse_args()
 
@@ -388,7 +394,12 @@ def main():
     # if is_main_process() and args.mode!='llama':
     #     debug_data(trainer, tokenizer, collator)
 
-    if check_for_checkpoints(args.output_dir):
+    if args.resume_from_checkpoint:
+        resume_path = os.path.expanduser(args.resume_from_checkpoint)
+        logging.info("从 checkpoint %s 恢复训练。", resume_path)
+        trainer.train(resume_from_checkpoint=resume_path)
+    elif check_for_checkpoints(args.output_dir):
+        logging.info("检测到现有 checkpoint，自动从最新的 checkpoint 恢复。")
         trainer.train(resume_from_checkpoint=True)
     else:
         trainer.train()
