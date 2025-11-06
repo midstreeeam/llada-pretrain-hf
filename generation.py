@@ -58,10 +58,14 @@ def run_diffusion_generation(
     top_k: Optional[int],
     top_p: Optional[float],
     decode_top_k: Optional[int],
+    remask_strategy: str = "low_confidence",
     debug: bool,
     tokenizer=None,
 ) -> Tuple[torch.LongTensor, torch.Tensor]:
     """Run Llada diffusion sampling given a masked prefix."""
+    if remask_strategy not in {"low_confidence", "random"}:
+        raise ValueError(f"Unsupported remask strategy: {remask_strategy}")
+
     device = input_ids.device
     batch_size, prompt_len = input_ids.shape
 
@@ -75,7 +79,7 @@ def run_diffusion_generation(
 
     fill_steps = torch.zeros(
         (batch_size, prompt_len + max_new_tokens),
-        dtype=torch.int16,
+        dtype=torch.int32,
         device=device,
     )
     fill_steps[:, :prompt_len] = -1
@@ -99,9 +103,13 @@ def run_diffusion_generation(
         block_end = prompt_len + (block_id + 1) * block_size
         block_mask_index = (x[:, block_start:block_end] == mask_token_id)
         num_transfer_tokens = _get_num_transfer_tokens(block_mask_index, steps_per_block)
+        block_committed = torch.zeros((batch_size, block_size), dtype=torch.bool, device=device)
+        block_tokens = x[:, block_start:block_end]
+        block_fill_steps = fill_steps[:, block_start:block_end]
 
         for step_idx in range(steps_per_block):
-            mask_index = (x == mask_token_id)
+            prev_block_snapshot = block_tokens.clone() if debug and tokenizer is not None else None
+
             outputs = model(x, attention_mask=attention_mask)
             logits = outputs.logits
 
@@ -111,7 +119,8 @@ def run_diffusion_generation(
                 logits_with_noise = logits
 
             if do_sample:
-                probs = torch.softmax(logits_with_noise, dim=-1)
+                sample_logits = logits_with_noise if temperature > 0 else logits
+                probs = torch.softmax(sample_logits, dim=-1)
                 x0 = torch.multinomial(probs.view(-1, probs.size(-1)), 1).view(probs.shape[0], probs.shape[1])
             else:
                 x0 = torch.argmax(logits_with_noise, dim=-1)
@@ -119,31 +128,37 @@ def run_diffusion_generation(
             probs = torch.softmax(logits, dim=-1)
             gathered = torch.gather(probs, dim=-1, index=x0.unsqueeze(-1)).squeeze(-1)
 
-            x0 = torch.where(mask_index, x0, x)
-            confidence = torch.where(mask_index, gathered, torch.tensor(-float("inf"), device=device))
-
-            confidence[:, :block_start] = -float("inf")
-            confidence[:, block_end:] = -float("inf")
-
-            transfer_index = torch.zeros_like(confidence, dtype=torch.bool)
-            for b in range(batch_size):
-                k = max(0, int(num_transfer_tokens[b, step_idx].item()))
-                if decode_top_k is not None and decode_top_k > 0:
-                    k = min(k, decode_top_k)
-                if k == 0:
-                    continue
-                _, top_idx = torch.topk(confidence[b], k)
-                transfer_index[b, top_idx] = True
-
-            updated_positions = transfer_index & mask_index
-            x = torch.where(updated_positions, x0, x)
+            candidate_block_tokens = x0[:, block_start:block_end]
+            confidence_block = gathered[:, block_start:block_end]
             step_counter = block_id * steps_per_block + step_idx + 1
-            if updated_positions.any():
-                fill_steps[updated_positions] = step_counter
 
-            if debug and tokenizer is not None:
+            for b in range(batch_size):
+                current_committed = int(block_committed[b].sum().item())
+                k_new = max(0, int(num_transfer_tokens[b, step_idx].item()))
+                if decode_top_k is not None and decode_top_k > 0:
+                    k_new = min(k_new, decode_top_k)
+                target_committed = min(block_size, current_committed + k_new)
+                if target_committed <= 0:
+                    continue
+
+                if remask_strategy == "random":
+                    selected_idx = torch.randperm(block_size, device=device)[:target_committed]
+                else:
+                    _, selected_idx = torch.topk(confidence_block[b], target_committed, dim=-1)
+
+                new_committed = torch.zeros(block_size, dtype=torch.bool, device=device)
+                new_committed[selected_idx] = True
+                block_committed[b] = new_committed
+
+                block_tokens[b].fill_(mask_token_id)
+                block_fill_steps[b].fill_(0)
+                block_tokens[b, new_committed] = candidate_block_tokens[b, new_committed]
+                block_fill_steps[b, new_committed] = step_counter
+
+            if debug and tokenizer is not None and prev_block_snapshot is not None:
                 logger = logging.getLogger(__name__)
-                changed = updated_positions.nonzero(as_tuple=False)
+                diff = block_tokens != prev_block_snapshot
+                changed = diff.nonzero(as_tuple=False)
                 if changed.numel() == 0:
                     logger.info(
                         "[debug] block %d step %d: no positions updated.",
@@ -157,13 +172,15 @@ def run_diffusion_generation(
                         step_idx + 1,
                         changed.size(0),
                     )
-                    for b, pos in changed:
-                        tok_id = x[b, pos].item()
+                    for pos in changed:
+                        b_idx = int(pos[0].item())
+                        offset = int(pos[1].item())
+                        tok_id = block_tokens[b_idx, offset].item()
                         tok_str = tokenizer.convert_ids_to_tokens(tok_id)
                         logger.info(
                             "    batch %d pos %d -> token %s (%d)",
-                            int(b.item()),
-                            int(pos.item()),
+                            b_idx,
+                            block_start + offset,
                             tok_str,
                             tok_id,
                         )
@@ -188,6 +205,7 @@ class GenerationPreviewCallback(TrainerCallback):
         block_size: int,
         decode_top_k: int,
         mask_token_id: Optional[int],
+        remask_strategy: str,
         debug_generation: bool,
         preview_log_path: Optional[str] = None,
     ) -> None:
@@ -203,6 +221,7 @@ class GenerationPreviewCallback(TrainerCallback):
         self.block_size = block_size
         self.decode_top_k = decode_top_k
         self.mask_token_id = mask_token_id
+        self.remask_strategy = remask_strategy
         self.trainer = None
         self.debug_generation = debug_generation
         self.preview_log_path = preview_log_path
@@ -253,6 +272,7 @@ class GenerationPreviewCallback(TrainerCallback):
                 top_k=self.top_k,
                 top_p=self.top_p,
                 decode_top_k=self.decode_top_k,
+                remask_strategy=self.remask_strategy,
                 debug=self.debug_generation,
                 tokenizer=self.tokenizer if self.debug_generation else None,
             )

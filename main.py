@@ -236,6 +236,13 @@ def main():
     parser.add_argument("--generation_debug", action="store_true",
                         help="在示例生成时输出扩散每一步的详细变化。")
     parser.add_argument(
+        "--generation_remask_strategy",
+        type=str,
+        default="low_confidence",
+        choices=("low_confidence", "random"),
+        help="扩散采样时的重采样策略：'low_confidence' 重试低置信度位置，'random' 随机选择。",
+    )
+    parser.add_argument(
         "--resume_from_checkpoint",
         type=str,
         default=None,
@@ -379,6 +386,7 @@ def main():
                     block_size=args.generation_block_size,
                     decode_top_k=args.generation_decode_top_k,
                     mask_token_id=tokenizer.mask_token_id,
+                    remask_strategy=args.generation_remask_strategy,
                     debug_generation=args.generation_debug,
                 )
             )

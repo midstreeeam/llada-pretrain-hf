@@ -28,8 +28,9 @@ main_args:
   generation_max_new_tokens: 64
   generation_num_diffusion_steps: 16
   generation_temperature: 1.0
-  generation_block_size: 8
+  generation_block_size: 32
   generation_decode_top_k: 0
+  generation_remask_strategy: low_confidence
   generation_prompts:
     - "Once upon a time, a curious child asked:"
     - "In a quiet village by the sea,"
