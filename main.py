@@ -4,7 +4,9 @@ import logging
 import os
 import pathlib
 import sys
+import time
 from datetime import datetime
+from typing import Optional
 
 import torch
 import torch.multiprocessing as mp
@@ -63,12 +65,65 @@ def check_for_checkpoints(output_dir):
 class MetricsLoggerCallback(TrainerCallback):
     """Persist raw metrics emitted by Trainer into a jsonl file."""
 
-    def __init__(self, log_path: str) -> None:
+    def __init__(self, log_path: Optional[str] = None) -> None:
         self.log_path = log_path
+        self._start_time: Optional[float] = None
+        self._last_progress_line: Optional[str] = None
+
+    @staticmethod
+    def _format_timespan(seconds: float) -> str:
+        seconds = max(0, int(seconds))
+        hours, remainder = divmod(seconds, 3600)
+        minutes, secs = divmod(remainder, 60)
+        return f"{hours:02}:{minutes:02}:{secs:02}"
+
+    def on_train_begin(self, args, state, control, **kwargs):
+        self._start_time = time.time()
+        return control
 
     def on_log(self, args, state, control, logs=None, **kwargs):
         if logs is None or not state.is_local_process_zero:
             return control
+
+        if self._start_time is None:
+            self._start_time = time.time()
+
+        now = time.time()
+        elapsed = now - self._start_time if self._start_time is not None else 0.0
+        global_step = int(state.global_step)
+        max_steps = getattr(state, "max_steps", None)
+        progress_record = None
+        progress_line = None
+
+        if max_steps and max_steps > 0 and global_step >= 0:
+            progress_ratio = min(1.0, global_step / max_steps)
+            steps_per_sec = global_step / elapsed if elapsed > 0 else None
+            remaining_steps = max_steps - global_step
+            eta_seconds = (remaining_steps / steps_per_sec) if steps_per_sec and steps_per_sec > 0 else None
+
+            progress_line_parts = [
+                f"[progress] step {global_step}/{max_steps}",
+                f"({progress_ratio * 100:.2f}%)",
+                f"elapsed={self._format_timespan(elapsed)}",
+            ]
+            if eta_seconds is not None:
+                progress_line_parts.append(f"eta={self._format_timespan(eta_seconds)}")
+            if steps_per_sec is not None:
+                progress_line_parts.append(f"step/s={steps_per_sec:.2f}")
+            tokens_per_sec = logs.get("train_tokens_per_second")
+            if isinstance(tokens_per_sec, (float, int)):
+                progress_line_parts.append(f"tok/s={tokens_per_sec:.2f}")
+
+            progress_line = " ".join(progress_line_parts)
+            progress_record = {
+                "step": global_step,
+                "max_steps": max_steps,
+                "percent": round(progress_ratio * 100, 4),
+                "elapsed_seconds": round(elapsed, 4),
+                "eta_seconds": round(eta_seconds, 4) if eta_seconds is not None else None,
+                "steps_per_second": round(steps_per_sec, 6) if steps_per_sec is not None else None,
+                "tokens_per_second": round(tokens_per_sec, 6) if isinstance(tokens_per_sec, (float, int)) else None,
+            }
 
         record = {
             "timestamp": datetime.utcnow().isoformat(),
@@ -77,6 +132,8 @@ class MetricsLoggerCallback(TrainerCallback):
             "epoch": float(state.epoch) if state.epoch is not None else None,
             "logs": logs,
         }
+        if progress_record is not None:
+            record["progress"] = progress_record
 
         scalar_items = [
             f"{key}={value:.4f}" if isinstance(value, (float, int)) else f"{key}={value}"
@@ -84,9 +141,13 @@ class MetricsLoggerCallback(TrainerCallback):
         ]
         if scalar_items:
             logging.info("[metrics] step %s %s", state.global_step, ", ".join(scalar_items))
+        if progress_line and progress_line != self._last_progress_line:
+            logging.info(progress_line)
+            self._last_progress_line = progress_line
 
-        with open(self.log_path, "a", encoding="utf-8") as f:
-            f.write(json.dumps(record, ensure_ascii=False) + "\n")
+        if self.log_path:
+            with open(self.log_path, "a", encoding="utf-8") as f:
+                f.write(json.dumps(record, ensure_ascii=False) + "\n")
 
         return control
 
@@ -138,6 +199,11 @@ def main():
                         help="每隔多少步进行一次评估。")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--bf16", action='store_true')
+    parser.add_argument(
+        "--disable_tqdm",
+        action="store_true",
+        help="训练时禁用 tqdm 进度条。",
+    )
     parser.add_argument("--generation_interval", type=int, default=0,
                         help="每隔多少步执行一次示例文本生成，0 表示禁用。")
     parser.add_argument("--generation_prompts", nargs="+", default=None,
@@ -163,33 +229,10 @@ def main():
 
     args = parser.parse_args()
 
-    # Configure file logging once output directory is known.
-    log_dir = os.path.join(args.output_dir, "logs")
-    os.makedirs(log_dir, exist_ok=True)
-    log_file = os.path.join(log_dir, f"train_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.log")
-
-    root_logger = logging.getLogger()
-    file_handler = getattr(root_logger, "_llada_file_handler", None)
-    if file_handler is None:
-        file_handler = logging.FileHandler(log_file, encoding="utf-8")
-        formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
-        file_handler.setFormatter(formatter)
-        root_logger.addHandler(file_handler)
-        root_logger._llada_file_handler = file_handler  # type: ignore[attr-defined]
-
-        hf_logging.add_handler(file_handler)
-        hf_logging.enable_default_handler()
-        hf_logging.enable_explicit_format()
-        hf_logging.set_verbosity_info()
-        hf_logging.disable_progress_bar()
-        logging.info("日志将写入: %s", log_file)
-
-    metrics_log_path = os.path.join(log_dir, "metrics.jsonl")
-    generation_log_path = os.path.join(log_dir, "generation.jsonl")
-    open(metrics_log_path, "a", encoding="utf-8").close()
-    open(generation_log_path, "a", encoding="utf-8").close()
-    logging.info("指标将写入: %s", metrics_log_path)
-    logging.info("示例生成将写入: %s", generation_log_path)
+    hf_logging.enable_default_handler()
+    hf_logging.enable_explicit_format()
+    hf_logging.set_verbosity_info()
+    hf_logging.disable_progress_bar()
 
     # --- 2. 打印和保存参数配置 ---
     # 只在主进程打印和保存参数配置
@@ -288,11 +331,12 @@ def main():
         per_device_eval_batch_size=args.per_device_eval_batch_size,
         eval_strategy=evaluation_strategy,
         eval_steps=eval_steps,
+        disable_tqdm=args.disable_tqdm,
         remove_unused_columns=False,
         ddp_find_unused_parameters=False,
         # eval_on_start = True,
     )
-    callbacks = [MetricsLoggerCallback(metrics_log_path)]
+    callbacks = [MetricsLoggerCallback()]
     if args.generation_interval > 0:
         if tokenizer.mask_token_id is None:
             logging.warning("Tokenizer 缺少 mask_token，无法执行文本生成预览，将跳过此功能。")
@@ -321,7 +365,6 @@ def main():
                     decode_top_k=args.generation_decode_top_k,
                     mask_token_id=tokenizer.mask_token_id,
                     debug_generation=args.generation_debug,
-                    preview_log_path=generation_log_path,
                 )
             )
 

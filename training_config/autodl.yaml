@@ -29,6 +29,7 @@ main_args:
   save_total_limit: 3
   seed: 42
   dataloader_num_workers: 1
+  disable_tqdm: true
   generation_interval: 2000
   generation_max_new_tokens: 64
   generation_num_diffusion_steps: 16
