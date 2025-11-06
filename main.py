@@ -5,7 +5,7 @@ import os
 import pathlib
 import sys
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 import torch
@@ -68,6 +68,7 @@ class MetricsLoggerCallback(TrainerCallback):
     def __init__(self, log_path: Optional[str] = None) -> None:
         self.log_path = log_path
         self._start_time: Optional[float] = None
+        self._initial_step: Optional[int] = None
         self._last_progress_line: Optional[str] = None
 
     @staticmethod
@@ -79,6 +80,8 @@ class MetricsLoggerCallback(TrainerCallback):
 
     def on_train_begin(self, args, state, control, **kwargs):
         self._start_time = time.time()
+        if hasattr(state, "global_step") and state.global_step is not None:
+            self._initial_step = int(state.global_step)
         return control
 
     def on_log(self, args, state, control, logs=None, **kwargs):
@@ -87,17 +90,21 @@ class MetricsLoggerCallback(TrainerCallback):
 
         if self._start_time is None:
             self._start_time = time.time()
+        if self._initial_step is None and hasattr(state, "global_step") and state.global_step is not None:
+            self._initial_step = int(state.global_step)
 
         now = time.time()
         elapsed = now - self._start_time if self._start_time is not None else 0.0
         global_step = int(state.global_step)
+        initial_step = self._initial_step or 0
+        steps_completed = max(0, global_step - initial_step)
         max_steps = getattr(state, "max_steps", None)
         progress_record = None
         progress_line = None
 
         if max_steps and max_steps > 0 and global_step >= 0:
             progress_ratio = min(1.0, global_step / max_steps)
-            steps_per_sec = global_step / elapsed if elapsed > 0 else None
+            steps_per_sec = steps_completed / elapsed if elapsed > 0 and steps_completed > 0 else None
             remaining_steps = max_steps - global_step
             eta_seconds = (remaining_steps / steps_per_sec) if steps_per_sec and steps_per_sec > 0 else None
 
@@ -123,10 +130,12 @@ class MetricsLoggerCallback(TrainerCallback):
                 "eta_seconds": round(eta_seconds, 4) if eta_seconds is not None else None,
                 "steps_per_second": round(steps_per_sec, 6) if steps_per_sec is not None else None,
                 "tokens_per_second": round(tokens_per_sec, 6) if isinstance(tokens_per_sec, (float, int)) else None,
+                "initial_step": initial_step,
+                "steps_completed": steps_completed,
             }
 
         record = {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "type": "metrics",
             "step": int(state.global_step),
             "epoch": float(state.epoch) if state.epoch is not None else None,
