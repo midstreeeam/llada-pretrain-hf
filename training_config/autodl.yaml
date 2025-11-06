@@ -13,7 +13,7 @@ main_args:
   output_dir: "{repo_dir}/output/llada_100m_tinystories_autodl"
   config_path: "{repo_dir}/model_config/llada_100m.json"
   mode: llada
-  num_train_epochs: 3
+  num_train_epochs: 4
   learning_rate: 0.0003
   per_device_train_batch_size: 32
   per_device_eval_batch_size: 32
