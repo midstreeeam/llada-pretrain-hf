@@ -103,13 +103,9 @@ def run_diffusion_generation(
         block_end = prompt_len + (block_id + 1) * block_size
         block_mask_index = (x[:, block_start:block_end] == mask_token_id)
         num_transfer_tokens = _get_num_transfer_tokens(block_mask_index, steps_per_block)
-        block_committed = torch.zeros((batch_size, block_size), dtype=torch.bool, device=device)
-        block_tokens = x[:, block_start:block_end]
-        block_fill_steps = fill_steps[:, block_start:block_end]
 
         for step_idx in range(steps_per_block):
-            prev_block_snapshot = block_tokens.clone() if debug and tokenizer is not None else None
-
+            mask_index = (x == mask_token_id)
             outputs = model(x, attention_mask=attention_mask)
             logits = outputs.logits
 
@@ -128,37 +124,43 @@ def run_diffusion_generation(
             probs = torch.softmax(logits, dim=-1)
             gathered = torch.gather(probs, dim=-1, index=x0.unsqueeze(-1)).squeeze(-1)
 
-            candidate_block_tokens = x0[:, block_start:block_end]
-            confidence_block = gathered[:, block_start:block_end]
-            step_counter = block_id * steps_per_block + step_idx + 1
+            x0 = torch.where(mask_index, x0, x)
+            confidence = torch.where(mask_index, gathered, torch.tensor(-float("inf"), device=device))
 
+            confidence[:, :block_start] = -float("inf")
+            confidence[:, block_end:] = -float("inf")
+
+            transfer_index = torch.zeros_like(confidence, dtype=torch.bool)
             for b in range(batch_size):
-                current_committed = int(block_committed[b].sum().item())
-                k_new = max(0, int(num_transfer_tokens[b, step_idx].item()))
+                available = torch.nonzero(mask_index[b, block_start:block_end], as_tuple=False).squeeze(-1)
+                if available.numel() == 0:
+                    continue
+
+                k = max(0, int(num_transfer_tokens[b, step_idx].item()))
                 if decode_top_k is not None and decode_top_k > 0:
-                    k_new = min(k_new, decode_top_k)
-                target_committed = min(block_size, current_committed + k_new)
-                if target_committed <= 0:
+                    k = min(k, decode_top_k)
+                k = min(k, available.numel())
+                if k == 0:
                     continue
 
                 if remask_strategy == "random":
-                    selected_idx = torch.randperm(block_size, device=device)[:target_committed]
+                    chosen = available[torch.randperm(available.numel(), device=device)[:k]]
                 else:
-                    _, selected_idx = torch.topk(confidence_block[b], target_committed, dim=-1)
+                    block_conf = confidence[b, block_start:block_end][available]
+                    top_vals, top_idx = torch.topk(block_conf, k, dim=-1)
+                    chosen = available[top_idx]
 
-                new_committed = torch.zeros(block_size, dtype=torch.bool, device=device)
-                new_committed[selected_idx] = True
-                block_committed[b] = new_committed
+                transfer_index[b, block_start:block_end][chosen] = True
 
-                block_tokens[b].fill_(mask_token_id)
-                block_fill_steps[b].fill_(0)
-                block_tokens[b, new_committed] = candidate_block_tokens[b, new_committed]
-                block_fill_steps[b, new_committed] = step_counter
+            updated_positions = transfer_index & mask_index
+            x = torch.where(updated_positions, x0, x)
+            step_counter = block_id * steps_per_block + step_idx + 1
+            if updated_positions.any():
+                fill_steps[updated_positions] = step_counter
 
-            if debug and tokenizer is not None and prev_block_snapshot is not None:
+            if debug and tokenizer is not None:
                 logger = logging.getLogger(__name__)
-                diff = block_tokens != prev_block_snapshot
-                changed = diff.nonzero(as_tuple=False)
+                changed = updated_positions.nonzero(as_tuple=False)
                 if changed.numel() == 0:
                     logger.info(
                         "[debug] block %d step %d: no positions updated.",
@@ -174,13 +176,12 @@ def run_diffusion_generation(
                     )
                     for pos in changed:
                         b_idx = int(pos[0].item())
-                        offset = int(pos[1].item())
-                        tok_id = block_tokens[b_idx, offset].item()
+                        tok_id = x[b_idx, pos[1]].item()
                         tok_str = tokenizer.convert_ids_to_tokens(tok_id)
                         logger.info(
                             "    batch %d pos %d -> token %s (%d)",
                             b_idx,
-                            block_start + offset,
+                            int(pos[1].item()),
                             tok_str,
                             tok_id,
                         )
