@@ -25,7 +25,7 @@ trainer = MultipleLossTrainer(
         eval_dataset=eval_dataset,   # <-- 新增，传递验证集
         data_collator=collator,
         # callbacks=None if args.mode == 'llama' or args.mode == 'llada' else [lazy_prob_scheduler_callback],
-        keys_you_want_to_log = ['lm_loss','current_mlm_prob','masked_lm_loss']
+        keys_you_want_to_log = ['current_mlm_prob']
     )
 ```
 

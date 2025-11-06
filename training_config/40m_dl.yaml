@@ -10,11 +10,11 @@ main_args:
   model_name_or_path: answerdotai/ModernBERT-base
   dataset_name: tinystories
   validation_dataset_name: none
-  output_dir: "{repo_dir}/output/llada_100m_tinystories_autodl"
-  config_path: "{repo_dir}/model_config/llada_100m.json"
+  output_dir: "{repo_dir}/output/llada_40m_dl"
+  config_path: "{repo_dir}/model_config/llada_40m.json"
   mode: llada
-  num_train_epochs: 3
-  learning_rate: 0.0003
+  num_train_epochs: 4
+  learning_rate: 0.0005
   per_device_train_batch_size: 32
   per_device_eval_batch_size: 32
   gradient_accumulation_steps: 1
@@ -28,19 +28,19 @@ main_args:
   eval_steps: 1000
   save_total_limit: 3
   seed: 42
-  dataloader_num_workers: 1
+  dataloader_num_workers: 2
   disable_tqdm: true
   generation_interval: 2000
   generation_max_new_tokens: 64
-  generation_num_diffusion_steps: 16
+  generation_num_diffusion_steps: 32
   generation_temperature: 1.0
-  generation_block_size: 32
+  generation_block_size: 8
   generation_decode_top_k: 0
   generation_remask_strategy: low_confidence
   generation_prompts:
-    - "Once upon a time, a curious child asked:"
+    - "Once upon a time,"
     - "In a quiet village by the sea,"
-  resume_from_checkpoint: "{repo_dir}/output/llada_100m_tinystories_autodl/checkpoint-160000"
+  resume_from_checkpoint: null
 
 flags:
   - bf16

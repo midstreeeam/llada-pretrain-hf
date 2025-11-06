@@ -31,6 +31,13 @@ from trainer import MultipleLossTrainer
 from utils.debug_func import analyze_weights, debug_data
 from utils.load_dataset import get_dataset
 from generation import GenerationPreviewCallback
+try:
+    from colorama import Fore, Style  # type: ignore
+
+    _COLORAMA_AVAILABLE = True
+except Exception:  # pragma: no cover - optional dependency
+    Fore = Style = None  # type: ignore
+    _COLORAMA_AVAILABLE = False
 
 # --- 设置日志 ---
 logging.basicConfig(
@@ -148,8 +155,22 @@ class MetricsLoggerCallback(TrainerCallback):
             f"{key}={value:.4f}" if isinstance(value, (float, int)) else f"{key}={value}"
             for key, value in logs.items()
         ]
+        loss_value = logs.get("loss")
+        if isinstance(loss_value, (float, int)):
+            loss_str = f"loss={loss_value:.4f}"
+            if _COLORAMA_AVAILABLE:
+                highlighted_loss = f"{Style.BRIGHT}{Fore.YELLOW}{loss_str}{Style.RESET_ALL}"
+            else:
+                highlighted_loss = f"**{loss_str}**"
+            scalar_items = [item for item in scalar_items if not item.startswith("loss=")]
+            scalar_items.insert(0, highlighted_loss)
+        step_label = f"step {global_step}"
+        if _COLORAMA_AVAILABLE:
+            step_label = f"{Style.BRIGHT}{Fore.CYAN}{step_label}{Style.RESET_ALL}"
+        else:
+            step_label = f"**{step_label}**"
         if scalar_items:
-            logging.info("[metrics] step %s %s", state.global_step, ", ".join(scalar_items))
+            logging.info("[metrics] %s %s", step_label, ", ".join(scalar_items))
         if progress_line and progress_line != self._last_progress_line:
             logging.info(progress_line)
             self._last_progress_line = progress_line
@@ -399,7 +420,7 @@ def main():
         eval_dataset=eval_dataset,   # <-- 新增，传递验证集
         data_collator=collator,
         # callbacks=None if args.mode == 'llama' or args.mode == 'llada' else [lazy_prob_scheduler_callback],
-        keys_you_want_to_log = ['lm_loss','current_mlm_prob','masked_lm_loss','non_masked_lm_loss'],
+        keys_you_want_to_log = ['current_mlm_prob'],
         callbacks=callbacks if callbacks else None,
     )
 

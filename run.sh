@@ -20,7 +20,7 @@ else
 fi
 
 # ===== CONFIG SELECTION =====
-DEFAULT_CONFIG="${REPO_DIR}/training_config/local.yaml"
+DEFAULT_CONFIG="${REPO_DIR}/training_config/40m_local.yaml"
 if [[ $# -gt 0 && "$1" != --* ]]; then
   CONFIG_FILE="$1"
   shift

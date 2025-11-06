@@ -1,6 +1,16 @@
-from transformers import AutoConfig,LlamaForCausalLM
-from .modeling_niu import ModernBertForDiffusionLM
-from .llada.modeling_llada import LLaDAModelLM
+from __future__ import annotations
+
+import argparse
+import sys
+from pathlib import Path
+
+# Ensure repository root is on sys.path so intra-project imports resolve.
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from llada.configuration_llada import LLaDAConfig
+from llada.modeling_llada import LLaDAModelLM
 
 # 格式化输出函数
 def format_params(num_params):
@@ -23,20 +33,42 @@ def calculate_model_params(model, model_name):
     print(f"可训练参数量: {format_params(trainable_params)} ({trainable_params:,})")
     print(f"不可训练参数量: {format_params(non_trainable_params)} ({non_trainable_params:,})")
 
-# 加载第一个模型
-# config = AutoConfig.from_pretrained('/mnt/dolphinfs/ssd_pool/docker/user/hadoop-aipnlp/ruanjunhao04/diffusion/model_config/modernbert_4b.json')
-# model = ModernBertForDiffusionLM(config)
 
-# # 加载第二个模型
-# config = AutoConfig.from_pretrained('/mnt/dolphinfs/ssd_pool/docker/user/hadoop-aipnlp/INS/ruanjunhao04/diffusion/model_config/llada_4b.json')
-# model1 = LLaDAModelLM(config)
+def load_llada_model(config_path: Path, init_params: bool = True) -> LLaDAModelLM:
+    config = LLaDAConfig.from_pretrained(str(config_path))
+    return LLaDAModelLM(config, init_params=init_params)
 
-config = AutoConfig.from_pretrained('/mnt/dolphinfs/ssd_pool/docker/user/hadoop-aipnlp/ruanjunhao04/diffusion/model_config/llama_4b.json')
-model2 = LlamaForCausalLM(config)
 
-# 计算并输出两个模型的参数量
-# calculate_model_params(model, "ModernBertForDiffusionLM")
-# calculate_model_params(model1, "LLaDAModelLM")
-calculate_model_params(model2, "LlamaForCausalLM")
+def main() -> None:
+    parser = argparse.ArgumentParser(description="统计 LLaDA 模型参数量")
+    parser.add_argument(
+        "configs",
+        nargs="*",
+        default=["model_config/llada_40m.json"]
+    )
+    parser.add_argument(
+        "--no-init",
+        action="store_true",
+        help="不显式初始化参数，仅构建模型结构（适用于快速估算）。",
+    )
+    args = parser.parse_args()
 
-breakpoint()
+    for config_arg in args.configs:
+        config_path = Path(config_arg)
+        if not config_path.is_absolute():
+            config_path = (REPO_ROOT / config_path).resolve()
+        if not config_path.exists():
+            print(f"[warn] 配置文件不存在：{config_path}")
+            continue
+
+        try:
+            model = load_llada_model(config_path, init_params=not args.no_init)
+        except Exception as exc:  # noqa: BLE001
+            print(f"[error] 无法加载模型配置 {config_path}: {exc}")
+            continue
+
+        calculate_model_params(model, config_path.stem)
+
+
+if __name__ == "__main__":
+    main()
