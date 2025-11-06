@@ -39,7 +39,7 @@ main_args:
   generation_prompts:
     - "Once upon a time, a curious child asked:"
     - "In a quiet village by the sea,"
-  resume_from_checkpoint: null
+  resume_from_checkpoint: "{repo_dir}/output/llada_100m_tinystories/checkpoint-100000"
 
 flags:
   - bf16
