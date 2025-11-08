@@ -1,5 +1,7 @@
 
-# 在开始前需要了解的
+## edit
+**currently use run.sh for LLaDA baseline training**
+All the contents below are original README content
 
 ## 关于词表
 由于预训练，模型和词表都是从头开始，我们这里没有提供从给定数据集学习词表的方法。目前项目里直接使用了modernbert的词表，主要适用于英文。如果你需要多语言词表，可以考虑使用qwen2以上系列的词表。
