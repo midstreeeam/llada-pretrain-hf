@@ -7,6 +7,8 @@ with a reference LM (judge) to compute cross-model perplexity.
 | --- | --- |
 | `pipeline.py` | Use `generation.py`'s diffusion sampler plus the judge scorer to produce the full report. |
 | `perplexity.py` | Score any JSONL/dataset using an AutoModel judge to obtain perplexity stats. |
+| `speedtest.py` | Measure raw diffusion generation throughput (tokens/s) for a checkpoint. |
+| `speedtest_ar.py` | Benchmark autoregressive HF models with/without KV cache. |
 
 ## Quick start
 
@@ -52,3 +54,29 @@ python eval/perplexity.py \
   --text-field generated_text \
   --output-json path/to/ppl.json
 ```
+### Speed test (diffusion)
+
+```bash
+PYTHONPATH=$(pwd) python eval/speedtest.py \
+  --model-path output/llada_40m_dl/checkpoint-463694 \
+  --num-prompts 256 \
+  --batch-size 32 \
+  --max-new-tokens 128 \
+  --diffusion-steps 128 \
+  --block-size 32
+```
+
+### Speed test (autoregressive)
+
+```bash
+PYTHONPATH=$(pwd) python3 eval/speedtest_ar.py \
+  --num-prompts 256 \
+  --batch-size 32 \
+  --prompt-max-tokens 512 \
+  --max-new-tokens 128 \
+  --dtype fp16 \
+  --device cuda \
+  --no-kv-cache
+```
+
+This benchmarks `rzzhan/tiny-llama-stories-42m` by default using TinyStories prompts; override `--model-name` or `--dataset-name` as needed.
