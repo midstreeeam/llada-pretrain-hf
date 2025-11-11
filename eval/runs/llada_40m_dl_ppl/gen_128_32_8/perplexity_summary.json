@@ -1,0 +1,47 @@
+{
+  "student_checkpoint": "output/llada_40m_dl/checkpoint-463694",
+  "student_tokenizer": null,
+  "judge_model": "Qwen/Qwen3-1.7B",
+  "generation_tag": "gen_128_32_8",
+  "timestamp": "2025-11-11T01:20:28.446436",
+  "artifacts": {
+    "generation_jsonl": "eval/runs/llada_40m_dl_ppl/gen_128_32_8/artifacts/model_generations.jsonl",
+    "model_ppl_summary": "eval/runs/llada_40m_dl_ppl/gen_128_32_8/artifacts/model_generations_perplexity.json",
+    "model_ppl_details": "eval/runs/llada_40m_dl_ppl/gen_128_32_8/artifacts/model_generations_perplexity.jsonl",
+    "reference_ppl_summary": "eval/runs/llada_40m_dl_ppl/gen_128_32_8/artifacts/reference_perplexity.json",
+    "reference_ppl_details": "eval/runs/llada_40m_dl_ppl/gen_128_32_8/artifacts/reference_perplexity.jsonl"
+  },
+  "generation_metadata": {
+    "num_prompts": 256,
+    "records_written": 256,
+    "output_path": "eval/runs/llada_40m_dl_ppl/gen_128_32_8/artifacts/model_generations.jsonl",
+    "device": "cuda",
+    "dtype": "torch.bfloat16"
+  },
+  "model_perplexity": {
+    "total_sequences": 256,
+    "total_tokens": 30936,
+    "total_neg_log_likelihood": 192280.0,
+    "mean_per_token_nll": 6.21541246444272,
+    "perplexity": 500.40234480481587,
+    "metadata": {
+      "judge_model": "Qwen/Qwen3-1.7B",
+      "dtype": "torch.bfloat16",
+      "device": "cuda",
+      "max_context_length": 1024
+    }
+  },
+  "reference_perplexity": {
+    "total_sequences": 1000,
+    "total_tokens": 222663,
+    "total_neg_log_likelihood": 465821.0,
+    "mean_per_token_nll": 2.0920449288835594,
+    "perplexity": 8.101465156857266,
+    "metadata": {
+      "judge_model": "Qwen/Qwen3-1.7B",
+      "dtype": "torch.bfloat16",
+      "device": "cuda",
+      "max_context_length": 1024
+    }
+  }
+}

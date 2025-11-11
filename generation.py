@@ -21,10 +21,17 @@ def _add_gumbel_noise(logits: torch.Tensor, temperature: float) -> torch.Tensor:
     """Inject temperature-controlled noise before sampling."""
     if temperature <= 0:
         return logits
-    logits64 = logits.to(torch.float64)
-    noise = torch.rand_like(logits64, dtype=torch.float64)
-    gumbel_noise = (-torch.log(noise + 1e-12)) ** temperature
-    return logits64.exp() / gumbel_noise
+    work_dtype = logits.dtype
+    if work_dtype not in (torch.float16, torch.bfloat16, torch.float32):
+        work_dtype = torch.float32
+    logits_fp = logits.to(work_dtype)
+    uniform = torch.rand_like(logits_fp, dtype=work_dtype)
+    eps = torch.finfo(work_dtype).eps
+    gumbel = -torch.log(-torch.log(uniform.clamp_min(eps)) + eps)
+    noisy_logits = logits_fp + temperature * gumbel
+    if noisy_logits.dtype != logits.dtype:
+        noisy_logits = noisy_logits.to(logits.dtype)
+    return noisy_logits
 
 
 def _get_num_transfer_tokens(mask_index: torch.Tensor, steps: int) -> torch.Tensor:

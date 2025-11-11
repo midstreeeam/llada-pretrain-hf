@@ -15,7 +15,7 @@ set -e
 # 1. 路径设置
 # 将这里的路径替换为你的实际路径
 MODEL_PATH="/mnt/hdfs/zw04mlnn01/checkpoint/llm_platform/model/answerdotai/ModernBERT-base/main"
-# MODEL_PATH="/mnt/hdfs/zw04mlnn01/checkpoint/llm_platform/model/Qwen/Qwen3-4B-Instruct-2507/main"
+# MODEL_PATH="/mnt/hdfs/zw04mlnn01/checkpoint/llm_platform/model/Qwen/Qwen3-4B-2507/main"
 # DATASET_PATH="/mnt/dolphinfs/ssd_pool/docker/user/hadoop-aipnlp/BERT_TRAINING_SERVICE/platform/dataset/EleutherAI/fineweb-edu-dedup-10b/main"
 # DATASET_NAME="debug"
 # DATASET_NAME="fineweb_10b"
@@ -75,7 +75,6 @@ CUDA_VISIBLE_DEVICES=0 python -m diffusion.main \
   --mode "${MODE}" \
   --save_steps 1000 \
   --bf16
-
 
 
 
