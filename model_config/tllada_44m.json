@@ -1,0 +1,53 @@
+{
+  "architectures": [
+    "LLaDAModelLM"
+  ],
+  "model_type": "llada",
+  "transformers_version": "4.47.0.dev0",
+
+  "d_model": 444,
+  "n_layers": 16,
+  "n_heads": 6,
+  "n_kv_heads": 2,
+  "mlp_hidden_size": 1536,
+  "vocab_size": 8192,
+  "embedding_size": 8192,
+  "max_sequence_length": 512,
+
+  "activation_type": "silu",
+
+  "layer_norm_type": "rms",
+  "layer_norm_with_affine": true,
+  "bias_for_layer_norm": false,
+  "rms_norm_eps": 1e-05,
+
+  "_comment_bias": "No biases in Linear layers (PaLM/LLaMA style)",
+  "include_bias": false,
+  "include_qkv_bias": false,
+
+  "_comment_attention": "RoPE; enable Multi-Query via n_kv_heads=1",
+  "rope": true,
+  "rope_theta": 10000.0,
+  "rope_full_precision": true,
+  "alibi": false,
+
+  "_comment_dropout": "Keep dropout off for TinyStories-scale",
+  "attention_dropout": 0.0,
+  "embedding_dropout": 0.0,
+  "residual_dropout": 0.0,
+
+  "_comment_initialization": "Full Megatron init; keep standard std/cutoff",
+  "init_fn": "full_megatron",
+  "init_std": 0.02,
+  "init_cutoff_factor": 2.0,
+
+  "_comment_misc": "Other settings for decoder-style model",
+  "block_type": "llama",
+  "use_cache": false,
+  "weight_tying": true,
+  "block_group_size": 1,
+  "init_device": "meta",
+  "input_emb_norm": false,
+  "scale_logits": false,
+  "pad_token_id": 0
+}
