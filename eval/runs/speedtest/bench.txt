@@ -3,54 +3,50 @@
 
 128-128
 ```
-PYTHONPATH=$(pwd) python eval/speedtest.py \ 
-  --model-path output/llada_40m_dl/checkpoint-463694 \
-  --num-prompts 256 \
-  --batch-size 32 \
-  --max-new-tokens 128 \
-  --diffusion-steps 128 \
-  --block-size 32
-`torch_dtype` is deprecated! Use `dtype` instead!
 Completed 32768 tokens across 8 batches in 71.83s
 Throughput: 456.20 tokens/s
 Peak GPU memory: 2970.70 MiB
 ```
 
+128-64
+```
+Completed 32768 tokens across 8 batches in 36.45s
+Throughput: 898.91 tokens/s
+Peak GPU memory: 2970.71 MiB
+```
+
 128-32
 ```
-PYTHONPATH=$(pwd) python eval/speedtest.py \ 
-  --model-path output/llada_40m_dl/checkpoint-463694 \
-  --num-prompts 256 \
-  --batch-size 32 \
-  --max-new-tokens 128 \
-  --diffusion-steps 32 \
-  --block-size 32
-`torch_dtype` is deprecated! Use `dtype` instead!
 Completed 32768 tokens across 8 batches in 18.43s
 Throughput: 1777.66 tokens/s
 Peak GPU memory: 2970.69 MiB
 ```
 
+128-16
+```
+Completed 32768 tokens across 8 batches in 9.38s
+Throughput: 3492.08 tokens/s
+Peak GPU memory: 2970.70 MiB
+```
+
 128-8
 ```
-PYTHONPATH=$(pwd) python eval/speedtest.py   --model-path output/llada_40m_dl/checkpoint-463694   --num-prompts 256   --batch-size 32   --max-new-tokens 128   --diffusion-steps 8   --block-size 16
 Completed 32768 tokens across 8 batches in 5.17s
 Throughput: 6333.59 tokens/s
 Peak GPU memory: 2970.69 MiB
+```
+
+128-4
+```
+Completed 32768 tokens across 8 batches in 2.76s
+Throughput: 11875.40 tokens/s
+Peak GPU memory: 2970.70 MiB
 ```
 
 ## llama_40m
 
 with kv-cache
 ```
-PYTHONPATH=$(pwd) python3 eval/speedtest_ar.py \
-  --num-prompts 256 \
-  --batch-size 32 \
-  --prompt-max-tokens 512 \
-  --max-new-tokens 128 \
-  --dtype fp16 \
-  --device cuda
-`torch_dtype` is deprecated! Use `dtype` instead!
 Completed 32768 tokens across 8 batches from roneneldan/TinyStories in 8.88s.
 Throughput: 3689.85 tokens/s (max_new_tokens only).
 Peak GPU memory: 384.51 MiB; use_cache=True.
@@ -58,15 +54,6 @@ Peak GPU memory: 384.51 MiB; use_cache=True.
 
 without kv-cache
 ```
-PYTHONPATH=$(pwd) python3 eval/speedtest_ar.py \
-  --num-prompts 256 \
-  --batch-size 32 \
-  --prompt-max-tokens 512 \
-  --max-new-tokens 128 \
-  --dtype fp16 \
-  --device cuda \
-  --no-kv-cache
-`torch_dtype` is deprecated! Use `dtype` instead!
 Completed 32768 tokens across 8 batches from roneneldan/TinyStories in 54.54s.
 Throughput: 600.83 tokens/s (max_new_tokens only).
 Peak GPU memory (allocated/reserved): 275.43 / 1072.00 MiB; use_cache=False.
