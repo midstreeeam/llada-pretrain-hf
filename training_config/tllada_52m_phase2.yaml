@@ -51,8 +51,9 @@ main_args:
     - "Once upon a time,"
     - "In a quiet village by the sea,"
 
-  # IMPORTANT: set this to your 10-epoch checkpoint path
-  resume_from_checkpoint: "{repo_dir}/output/tllada_52m_dl/checkpoint-331210"
+  # 从阶段一的10 epoch checkpoint加载模型权重；不恢复优化器/调度器（使用新日程）
+  init_model_from_checkpoint: "{repo_dir}/output/tllada_52m_dl/checkpoint-331210"
+  resume_from_checkpoint: null
 
 flags:
   - bf16

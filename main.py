@@ -263,6 +263,14 @@ def main():
         choices=("low_confidence", "random"),
         help="扩散采样时的重采样策略：'low_confidence' 重试低置信度位置，'random' 随机选择。",
     )
+    # 可选：仅加载模型权重（不加载优化器/调度器），用于阶段二继续训练但更换训练日程
+    parser.add_argument(
+        "--init_model_from_checkpoint",
+        type=str,
+        default=None,
+        help="若提供，将从该checkpoint目录加载模型权重并以新优化器/调度器开始训练；"
+             "不要同时设置 resume_from_checkpoint 以避免加载优化器状态。",
+    )
     # 可选：目标平均mask率（例如 0.5/0.8）。若不设置，保持原有随机[~0,1]的行为。
     parser.add_argument("--mlm_target_rate", type=float, default=None,
                         help="期望的平均mask比例（0-1之间）。不设置则保持原有随机范围。")
@@ -338,10 +346,20 @@ def main():
 
 
     if args.mode == 'llada':
-        config = LLaDAConfig.from_pretrained(args.config_path)
-        model = LLaDAModelLM(config,init_params=True)
-        config.register_for_auto_class()
-        model.register_for_auto_class("AutoModel")
+        if args.init_model_from_checkpoint is not None and args.init_model_from_checkpoint.strip() != "":
+            if is_main_process():
+                logging.info(f"从 checkpoint 加载模型权重（不加载优化器）：{args.init_model_from_checkpoint}")
+            model = LLaDAModelLM.from_pretrained(args.init_model_from_checkpoint)
+            config = model.config
+        else:
+            config = LLaDAConfig.from_pretrained(args.config_path)
+            model = LLaDAModelLM(config,init_params=True)
+        # 注册 AutoClass（可选）
+        try:
+            config.register_for_auto_class()
+            model.register_for_auto_class("AutoModel")
+        except Exception:
+            pass
     elif args.mode == 'llama':
         config = AutoConfig.from_pretrained(args.config_path)
         model = LlamaForCausalLM(config)
