@@ -44,7 +44,7 @@ def main() -> None:
     parser.add_argument(
         "configs",
         nargs="*",
-        default=["model_config/tllada_44m.json"]
+        default=["model_config/tllada_52m.json"]
     )
     parser.add_argument(
         "--no-init",

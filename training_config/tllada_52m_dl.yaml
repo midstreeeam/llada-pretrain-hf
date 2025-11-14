@@ -10,13 +10,13 @@ main_args:
   model_name_or_path: "{repo_dir}/tokenizers/tinystory"
   dataset_name: tinystories
   validation_dataset_name: none
-  output_dir: "{repo_dir}/output/tllada_44m_dl"
-  config_path: "{repo_dir}/model_config/tllada_44m.json"
+  output_dir: "{repo_dir}/output/tllada_52m_dl"
+  config_path: "{repo_dir}/model_config/tllada_52m.json"
   mode: llada
   num_train_epochs: 8
-  learning_rate: 0.0005
-  per_device_train_batch_size: 32
-  per_device_eval_batch_size: 32
+  learning_rate: 0.0007
+  per_device_train_batch_size: 64
+  per_device_eval_batch_size: 64
   gradient_accumulation_steps: 1
   max_length: 512
   mlm_start_prob: 0.3
@@ -26,11 +26,11 @@ main_args:
   logging_steps: 100
   save_steps: 20000
   eval_steps: 1000
-  save_total_limit: 3
+  save_total_limit: 2
   seed: 42
   dataloader_num_workers: 2
   disable_tqdm: true
-  generation_interval: 2000
+  generation_interval: 2500
   generation_max_new_tokens: 64
   generation_num_diffusion_steps: 32
   generation_temperature: 1.0
@@ -53,4 +53,3 @@ ensure_dirs:
   - "{repo_dir}/hf_cache/hub"
 
 extra_args: []
-

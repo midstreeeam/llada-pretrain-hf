@@ -20,7 +20,7 @@ else
 fi
 
 # ===== CONFIG SELECTION =====
-DEFAULT_CONFIG="${REPO_DIR}/training_config/tllada_44m_dl.yaml"
+DEFAULT_CONFIG="${REPO_DIR}/training_config/tllada_52m_dl.yaml"
 if [[ $# -gt 0 && "$1" != --* ]]; then
   CONFIG_FILE="$1"
   shift

@@ -4,8 +4,8 @@ main_args:
   model_name_or_path: "{repo_dir}/tokenizers/tinystory"
   dataset_name: tinystories
   validation_dataset_name: none
-  output_dir: "{repo_dir}/output/tllada_44m_local"
-  config_path: "{repo_dir}/model_config/tllada_44m.json"
+  output_dir: "{repo_dir}/output/tllada_52m_local"
+  config_path: "{repo_dir}/model_config/tllada_52m.json"
   mode: llada
   num_train_epochs: 5
   learning_rate: 0.0005
@@ -47,4 +47,3 @@ ensure_dirs:
   - "{repo_dir}/hf_cache/hub"
 
 extra_args: []
-

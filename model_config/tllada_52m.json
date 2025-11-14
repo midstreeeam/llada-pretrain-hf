@@ -5,14 +5,14 @@
   "model_type": "llada",
   "transformers_version": "4.47.0.dev0",
 
-  "d_model": 444,
+  "d_model": 512,
   "n_layers": 16,
-  "n_heads": 6,
+  "n_heads": 8,
   "n_kv_heads": 2,
   "mlp_hidden_size": 1536,
   "vocab_size": 8192,
   "embedding_size": 8192,
-  "max_sequence_length": 512,
+  "max_sequence_length": 2048,
 
   "activation_type": "silu",
 
@@ -51,3 +51,4 @@
   "scale_logits": false,
   "pad_token_id": 0
 }
+
