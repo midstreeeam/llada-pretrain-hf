@@ -17,11 +17,11 @@ main_args:
 
   # Phase-2 schedule: start from a lower LR and shorter sequences for story focus
   num_train_epochs: 3
-  learning_rate: 0.0001
-  per_device_train_batch_size: 32
-  per_device_eval_batch_size: 32
+  learning_rate: 0.0002
+  per_device_train_batch_size: 64
+  per_device_eval_batch_size: 64
   gradient_accumulation_steps: 1
-  max_length: 256
+  max_length: 512
 
   # Keep current MLM settings (collator uses uniform per-sample p)
   mlm_start_prob: 0.3
@@ -40,7 +40,7 @@ main_args:
   disable_tqdm: true
 
   # More frequent previews can help monitor refinement
-  generation_interval: 1000
+  generation_interval: 2500
   generation_max_new_tokens: 64
   generation_num_diffusion_steps: 32
   generation_temperature: 1.0
@@ -52,7 +52,7 @@ main_args:
     - "In a quiet village by the sea,"
 
   # IMPORTANT: set this to your 10-epoch checkpoint path
-  resume_from_checkpoint: "{repo_dir}/output/tllada_52m_dl/checkpoint-REPLACE_WITH_10EPOCH_STEP"
+  resume_from_checkpoint: "{repo_dir}/output/tllada_52m_dl/checkpoint-331210"
 
 flags:
   - bf16
