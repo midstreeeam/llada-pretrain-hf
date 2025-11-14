@@ -20,13 +20,14 @@ else
 fi
 
 # ===== CONFIG SELECTION =====
-DEFAULT_CONFIG="${REPO_DIR}/training_config/tllada_52m_dl_phase2.yaml"
-if [[ $# -gt 0 && "$1" != --* ]]; then
-  CONFIG_FILE="$1"
-  shift
-else
-  CONFIG_FILE="${DEFAULT_CONFIG}"
+# Require the YAML config path as the first argument.
+if [[ $# -eq 0 || "$1" == --* ]]; then
+  echo "Usage: bash run.sh <config.yaml> [extra args...]" >&2
+  echo "Example: bash run.sh training_config/tllada_52m_phase2.yaml" >&2
+  exit 1
 fi
+CONFIG_FILE="$1"
+shift
 CONFIG_FILE="$(cd "${REPO_DIR}" && realpath "${CONFIG_FILE}")"
 if [[ ! -f "${CONFIG_FILE}" ]]; then
   echo "[error] Config file not found: ${CONFIG_FILE}" >&2
