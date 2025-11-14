@@ -123,6 +123,8 @@ class LLaDACollator:
         tokenizer: PreTrainedTokenizer,
         max_length: int = 512,
         text_key: str = 'text',
+        target_mask_rate: float | None = None,
+        mask_rate_concentration: float = 2.0,
     ):
         
         self.tokenizer = tokenizer
@@ -140,6 +142,9 @@ class LLaDACollator:
         # 可用于随机替换的token范围
         self.vocab_size = tokenizer.vocab_size
         
+        # 控制平均mask比例（可选）
+        self.target_mask_rate = target_mask_rate
+        self.mask_rate_concentration = mask_rate_concentration
         
     
     def __call__(self, examples: List[Dict[str, Any]]) -> Dict[str, torch.Tensor]:
@@ -218,10 +223,23 @@ class LLaDACollator:
         }
     
     def _get_mlm_probability(self, eps: float = 1e-3) -> float:
-        t = random.uniform(0, 1)
-        # 这是一个简单的线性噪声调度
-        p_mask = (1 - eps) * t + eps
-        return p_mask
+        """
+        采样本batch的mask概率：
+        - 未设置 target_mask_rate 时：保持原有行为，在 (eps, 1] 上均匀随机，期望≈0.5。
+        - 设置了 target_mask_rate=r 时：用 Beta(alpha, beta) 采样，期望≈r（仍然是随机的）。
+        """
+        if self.target_mask_rate is None:
+            t = random.uniform(0.0, 1.0)
+            return (1 - eps) * t + eps
+        r = max(eps, min(1.0 - eps, float(self.target_mask_rate)))
+        kappa = max(1e-6, float(self.mask_rate_concentration))
+        alpha = max(1e-6, r * kappa)
+        beta = max(1e-6, (1.0 - r) * kappa)
+        try:
+            p = random.betavariate(alpha, beta)
+        except Exception:
+            p = r
+        return max(eps, min(1.0, p))
 
     def _mask_tokens(self, input_ids: List[int], current_mlm_prob ) -> tuple:
         """

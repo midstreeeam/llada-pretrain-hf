@@ -263,6 +263,12 @@ def main():
         choices=("low_confidence", "random"),
         help="扩散采样时的重采样策略：'low_confidence' 重试低置信度位置，'random' 随机选择。",
     )
+    # 可选：目标平均mask率（例如 0.5/0.8）。若不设置，保持原有随机[~0,1]的行为。
+    parser.add_argument("--mlm_target_rate", type=float, default=None,
+                        help="期望的平均mask比例（0-1之间）。不设置则保持原有随机范围。")
+    # 可选：控制mask率的集中度（Beta分布的kappa）。数值越大，方差越小，越接近于平均值。
+    parser.add_argument("--mlm_rate_concentration", type=float, default=2.0,
+                        help="控制mask率采样的集中度（Beta分布kappa）。越大越稳定，越小越发散。")
     parser.add_argument(
         "--resume_from_checkpoint",
         type=str,
@@ -347,7 +353,12 @@ def main():
     if args.mode == 'llama':
         collator = NTPCollator(tokenizer, max_length=args.max_length)
     elif args.mode == 'llada':
-        collator = LLaDACollator(tokenizer,max_length=args.max_length)
+        collator = LLaDACollator(
+            tokenizer,
+            max_length=args.max_length,
+            target_mask_rate=args.mlm_target_rate,
+            mask_rate_concentration=args.mlm_rate_concentration,
+        )
         
 
     training_args = TrainingArguments(
