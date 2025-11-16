@@ -27,6 +27,7 @@ if str(REPO_ROOT) not in sys.path:
 from collator import NTPCollator, LLaDACollator
 from llada.modeling_llada import LLaDAModelLM
 from llada.configuration_llada import LLaDAConfig
+from mlm_schedule import LazyScheduledMLMProbProvider, LazyMLMProbSchedulerCallback
 from trainer import MultipleLossTrainer
 from utils.debug_func import analyze_weights, debug_data
 from utils.load_dataset import get_dataset
@@ -345,6 +346,18 @@ def main():
 
     shared_step = mp.Value('i', 0)
 
+    # 基于训练步数的MLM概率调度器：使用 mlm_start_prob / mlm_end_prob / mlm_schedule_type
+    mlm_prob_provider = LazyScheduledMLMProbProvider(
+        shared_step=shared_step,
+        start_prob=args.mlm_start_prob,
+        end_prob=args.mlm_end_prob,
+        schedule_type=args.mlm_schedule_type,
+    )
+    lazy_prob_scheduler_callback = LazyMLMProbSchedulerCallback(
+        prob_provider=mlm_prob_provider,
+        shared_step=shared_step,
+    )
+
 
     if args.mode == 'llada':
         if args.init_model_from_checkpoint is not None and args.init_model_from_checkpoint.strip() != "":
@@ -373,10 +386,10 @@ def main():
         collator = NTPCollator(tokenizer, max_length=args.max_length)
     elif args.mode == 'llada':
         collator = LLaDACollator(
-            tokenizer,
+            tokenizer=tokenizer,
             max_length=args.max_length,
-            target_mask_rate=args.mlm_target_rate,
-            mask_rate_concentration=args.mlm_rate_concentration,
+            # 使用调度器控制当前mask比例（旧行为：mlm_start_prob / mlm_end_prob / mlm_schedule_type）
+            mlm_prob_provider=mlm_prob_provider,
         )
         
 
@@ -426,7 +439,7 @@ def main():
         ddp_find_unused_parameters=False,
         # eval_on_start = True,
     )
-    callbacks = [MetricsLoggerCallback()]
+    callbacks = [MetricsLoggerCallback(), lazy_prob_scheduler_callback]
     if args.generation_interval > 0:
         if tokenizer.mask_token_id is None:
             logging.warning("Tokenizer 缺少 mask_token，无法执行文本生成预览，将跳过此功能。")

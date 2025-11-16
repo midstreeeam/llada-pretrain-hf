@@ -27,8 +27,8 @@ main_args:
   mlm_start_prob: 0.3
   mlm_end_prob: 0.15
   mlm_schedule_type: cosine
-  mlm_target_rate: 0.8
-  mlm_rate_concentration: 2.5
+  # mlm_target_rate: 0.8
+  # mlm_rate_concentration: 2.5
   warmup_ratio: 0.02
 
   logging_steps: 100

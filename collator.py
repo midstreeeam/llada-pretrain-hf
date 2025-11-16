@@ -125,6 +125,7 @@ class LLaDACollator:
         text_key: str = 'text',
         target_mask_rate: float | None = None,
         mask_rate_concentration: float = 2.0,
+        mlm_prob_provider: Callable[[], float] | None = None,
     ):
         
         self.tokenizer = tokenizer
@@ -142,9 +143,10 @@ class LLaDACollator:
         # 可用于随机替换的token范围
         self.vocab_size = tokenizer.vocab_size
         
-        # 控制平均mask比例（可选）
+        # 控制平均mask比例（可选）：若提供调度器，则优先使用调度器
         self.target_mask_rate = target_mask_rate
         self.mask_rate_concentration = mask_rate_concentration
+        self.mlm_prob_provider = mlm_prob_provider
         
     
     def __call__(self, examples: List[Dict[str, Any]]) -> Dict[str, torch.Tensor]:
@@ -225,9 +227,20 @@ class LLaDACollator:
     def _get_mlm_probability(self, eps: float = 1e-3) -> float:
         """
         采样本batch的mask概率：
+        - 若提供了 mlm_prob_provider，则优先从调度器获取（基于全局step的调度）。
         - 未设置 target_mask_rate 时：保持原有行为，在 (eps, 1] 上均匀随机，期望≈0.5。
         - 设置了 target_mask_rate=r 时：用 Beta(alpha, beta) 采样，期望≈r（仍然是随机的）。
         """
+        # 优先使用基于训练步数的调度器
+        if self.mlm_prob_provider is not None:
+            try:
+                p = float(self.mlm_prob_provider())
+            except Exception:
+                # 若调度器异常，回退到后续逻辑
+                p = None
+            else:
+                return max(eps, min(1.0, p))
+
         if self.target_mask_rate is None:
             t = random.uniform(0.0, 1.0)
             return (1 - eps) * t + eps
