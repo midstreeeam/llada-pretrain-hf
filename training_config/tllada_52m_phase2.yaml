@@ -32,7 +32,7 @@ main_args:
   warmup_ratio: 0.02
 
   logging_steps: 100
-  save_steps: 200
+  save_steps: 20000
   eval_steps: 1000
   save_total_limit: 3
   seed: 42
