@@ -229,6 +229,7 @@ def main():
                         help="每隔多少步进行一次评估。")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--bf16", action='store_true')
+    parser.add_argument("--fp16", action='store_true')
     parser.add_argument(
         "--disable_tqdm",
         action="store_true",
@@ -379,6 +380,22 @@ def main():
         )
         
 
+    # Determine precision flags
+    use_bf16 = bool(args.bf16)
+    use_fp16 = bool(args.fp16)
+    # If neither specified on CLI, try a sensible default
+    if not use_bf16 and not use_fp16:
+        try:
+            if torch.cuda.is_available():
+                major, _ = torch.cuda.get_device_capability()
+                # Ampere (8.x) or newer generally supports bf16; otherwise fall back to fp16
+                if major >= 8:
+                    use_bf16 = True
+                else:
+                    use_fp16 = True
+        except Exception:
+            pass
+
     training_args = TrainingArguments(
         output_dir=args.output_dir,
         gradient_accumulation_steps=args.gradient_accumulation_steps,
@@ -392,7 +409,8 @@ def main():
         save_total_limit=args.save_total_limit,
         data_seed=args.seed,
         seed=args.seed,
-        bf16=True,
+        bf16=use_bf16,
+        fp16=use_fp16,
         adam_beta2 = 0.95,
         weight_decay = 0.1,
         logging_steps=args.logging_steps,
