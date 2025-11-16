@@ -58,7 +58,8 @@ main_args:
   save_safetensors: false
 
 flags:
-  - fp16
+  - bf16
+  # Do not use safetensors saving for tied weights; omit the flag (default false)
 
 ensure_dirs:
   - "{output_dir}"

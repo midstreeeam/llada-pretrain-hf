@@ -230,6 +230,8 @@ def main():
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--bf16", action='store_true')
     parser.add_argument("--fp16", action='store_true')
+    parser.add_argument("--save_safetensors", action='store_true',
+                        help="Save checkpoints in safetensors format (default: disabled).")
     parser.add_argument(
         "--disable_tqdm",
         action="store_true",
@@ -411,6 +413,7 @@ def main():
         seed=args.seed,
         bf16=use_bf16,
         fp16=use_fp16,
+        save_safetensors=args.save_safetensors,
         adam_beta2 = 0.95,
         weight_decay = 0.1,
         logging_steps=args.logging_steps,

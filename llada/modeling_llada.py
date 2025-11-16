@@ -1617,8 +1617,11 @@ class LLaDAModelLM(PreTrainedModel):
             self.model.transformer.ff_out = value
 
     def tie_weights(self):
-        if self.config.weight_tying:
-            self.model.transformer.ff_out = self.model.transformer.wte
+        # For LLaDA with weight tying, logits are computed via F.linear(x, wte.weight),
+        # so we do not need (and should not create) a separate output layer alias.
+        # Creating an alias like `ff_out = wte` introduces duplicate parameter names
+        # that break safetensors serialization. Keep this a no-op.
+        return
 
     # BUG 块推理还有问题
     @torch.inference_mode()
