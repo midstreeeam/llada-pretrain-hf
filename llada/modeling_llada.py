@@ -1540,25 +1540,68 @@ class LLaDAModelLM(PreTrainedModel):
         hidden_states = outputs.hidden_states
 
         loss = None
-        # [rangehow]: edited, add 重要性采样
         if labels is not None:
+            per_token_mlm_weights: Optional[torch.Tensor] = None
 
-            per_token_mlm_weights = None
-            # 如果传入了 current_mlm_prob，则计算 per-token 权重
-            if current_mlm_prob is not None:
-                # 加一个很小的 epsilon 防止除以 0
+            # 可选：基于rank的MLM加权（只在配置启用时生效）
+            if getattr(self, "rw_mlm_loss", False):
+                with torch.no_grad():
+                    # logits: (batch, seq_len, vocab)
+                    # 在float32中计算权重，避免混合精度导致的dtype冲突
+                    probs = F.softmax(logits.float(), dim=-1)
+                    max_probs, _ = probs.max(dim=-1)  # (batch, seq_len), float32
+                    labels_mask = labels.ne(-100)     # 仅对有标签的位置进行排序和加权
+                    batch_size, seq_len = labels.shape
+                    weights = torch.zeros(
+                        batch_size,
+                        seq_len,
+                        device=logits.device,
+                        dtype=torch.float32,
+                    )
+                    alpha = getattr(self.config, "rank_weight_alpha", 2.0)
+
+                    for b in range(batch_size):
+                        mask = labels_mask[b]
+                        m = int(mask.sum().item())
+                        if m <= 0:
+                            continue
+                        if m == 1:
+                            # 只有一个位置，直接给权重1
+                            weights[b, mask] = 1.0
+                            continue
+
+                        conf = max_probs[b, mask]  # (m,), float32
+                        # ranks: 0 .. m-1, 0 为最高置信度
+                        sorted_idx = torch.argsort(conf, descending=True)
+                        ranks = torch.empty_like(sorted_idx, dtype=torch.float32)
+                        ranks[sorted_idx] = torch.arange(
+                            m, device=logits.device, dtype=torch.float32
+                        )
+                        u = ranks / (m - 1)  # 归一化到[0,1]
+                        w_raw = torch.exp(-alpha * u)
+                        # 归一化，使每句的平均权重≈1
+                        norm = m / w_raw.sum().clamp_min(1e-8)
+                        w_seq = w_raw * norm
+                        weights[b, mask] = w_seq
+
+                per_token_mlm_weights = weights
+
+            # 默认行为：若未启用rank加权，则保持旧逻辑
+            elif current_mlm_prob is not None:
+                # 原先的基于当前MLM概率的句子级重要性采样：每句用 1 / p 进行缩放
                 t = current_mlm_prob.to(logits.device)
                 weights_per_sentence = 1.0 / (t + 1e-8)
-                
                 seq_len = logits.shape[1]
-                     
                 per_token_mlm_weights = weights_per_sentence.unsqueeze(1).expand(-1, seq_len)
 
+            loss = ForMaskedLMLoss(
+                logits,
+                labels,
+                vocab_size=self.config.vocab_size,
+                per_token_weights=per_token_mlm_weights,
+                **kwargs,
+            )
 
-
-            loss = ForMaskedLMLoss(logits, labels, vocab_size=self.config.vocab_size,per_token_weights=per_token_mlm_weights,**kwargs)
-            
-            
         if not return_dict:
             output = (logits,) + outputs[1:]
             return (loss,) + output if loss is not None else output

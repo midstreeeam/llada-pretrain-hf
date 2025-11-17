@@ -232,6 +232,17 @@ def main():
     parser.add_argument("--bf16", action='store_true')
     parser.add_argument("--fp16", action='store_true')
     parser.add_argument(
+        "--rw_mlm_loss",
+        action="store_true",
+        help="Enable rank-weighted MLM loss (default: off).",
+    )
+    parser.add_argument(
+        "--rank_weight_alpha",
+        type=float,
+        default=2.0,
+        help="Sharpness parameter for rank-weighted MLM loss (larger = more emphasis on top ranks).",
+    )
+    parser.add_argument(
         "--disable_tqdm",
         action="store_true",
         help="训练时禁用 tqdm 进度条。",
@@ -368,6 +379,10 @@ def main():
         else:
             config = LLaDAConfig.from_pretrained(args.config_path)
             model = LLaDAModelLM(config,init_params=True)
+        # 将rank-weight相关配置写入config，供模型在前向时使用
+        setattr(model.config, "rank_weight_alpha", float(getattr(args, "rank_weight_alpha", 2.0)))
+        # 可选：启用基于rank的MLM加权损失
+        setattr(model, "rw_mlm_loss", bool(args.rw_mlm_loss))
         # 注册 AutoClass（可选）
         try:
             config.register_for_auto_class()

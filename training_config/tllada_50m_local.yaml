@@ -1,0 +1,53 @@
+env: {}
+
+main_args:
+  model_name_or_path: "{repo_dir}/tokenizers/tinystory2"
+  dataset_name: tinystories
+  validation_dataset_name: none
+  output_dir: "{repo_dir}/output/tllada_50m_local"
+  config_path: "{repo_dir}/model_config/tllada_50m.json"
+  mode: llada
+  num_train_epochs: 5
+  learning_rate: 0.0005
+  per_device_train_batch_size: 6
+  per_device_eval_batch_size: 6
+  gradient_accumulation_steps: 2
+  max_length: 512
+  mlm_start_prob: 0.3
+  mlm_end_prob: 0.15
+  mlm_schedule_type: cosine
+  warmup_ratio: 0.05
+  logging_steps: 100
+  save_steps: 200
+  eval_steps: 1000
+  save_total_limit: 3
+  seed: 42
+  dataloader_num_workers: 2
+  disable_tqdm: true
+  generation_interval: 2000
+  generation_max_new_tokens: 64
+  generation_num_diffusion_steps: 32
+  generation_temperature: 1.0
+  generation_block_size: 8
+  generation_decode_top_k: 0
+  generation_remask_strategy: low_confidence
+  generation_prompts:
+    - "Once upon a time,"
+    - "In a quiet village by the sea,"
+  resume_from_checkpoint: null
+
+  rw_mlm_loss: true
+  rank_weight_alpha: 1.0
+
+flags:
+  - bf16
+
+ensure_dirs:
+  - "{output_dir}"
+  - "{repo_dir}/hf_cache"
+  - "{repo_dir}/hf_cache/transformers"
+  - "{repo_dir}/hf_cache/datasets"
+  - "{repo_dir}/hf_cache/hub"
+
+extra_args: []
+
