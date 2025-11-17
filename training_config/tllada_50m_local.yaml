@@ -36,8 +36,8 @@ main_args:
     - "In a quiet village by the sea,"
   resume_from_checkpoint: null
 
-  rw_mlm_loss: true
-  rank_weight_alpha: 1.0
+  # rw_mlm_loss: true
+  # rank_weight_alpha: 1.0
 
 flags:
   - bf16
