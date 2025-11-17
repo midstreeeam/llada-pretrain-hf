@@ -1,0 +1,30 @@
+{
+  "unk_token": {
+    "id": 1,
+    "content": "[UNK]"
+  },
+  "sep_token": {
+    "id": 3,
+    "content": "[SEP]"
+  },
+  "pad_token": {
+    "id": 0,
+    "content": "[PAD]"
+  },
+  "cls_token": {
+    "id": 2,
+    "content": "[CLS]"
+  },
+  "mask_token": {
+    "id": 4,
+    "content": "[MASK]"
+  },
+  "bos_token": {
+    "id": 5,
+    "content": "<bos>"
+  },
+  "eos_token": {
+    "id": 6,
+    "content": "<eos>"
+  }
+}

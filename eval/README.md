@@ -14,17 +14,17 @@ with a reference LM (judge) to compute cross-model perplexity.
 
 ```bash
 PYTHONPATH=$(pwd) python eval/pipeline.py \
-  --student-checkpoint output/llada_40m_dl/checkpoint-463694 \
+  --student-checkpoint output/tllada_52m/phase2/checkpoint-99363 \
   --judge-model Qwen/Qwen3-1.7B \
-  --output-dir eval/runs/llada_40m_dl_ppl \
+  --output-dir eval/runs/llada_52m_phase2_ppl \
   --generation-num-prompts 256 \
   --generation-max-new-tokens 128 \
-  --generation-diffusion-steps 128 \
-  --generation-block-size 32 \
+  --generation-diffusion-steps 64 \
+  --generation-block-size 128 \
   --judge-batch-size 2 \
   --judge-max-context 512 \
   --reference-split train[:2000] \
-  --reference-max-samples 1000
+  --reference-max-samples 100
 ```
 
 > The `PYTHONPATH=$(pwd)` ensures `generation.py` and other repo modules are importable.

@@ -102,7 +102,7 @@ def train_wordpiece(out_dir: Path, vocab_size: int, max_length: int):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out_dir", type=str, required=True, help="Directory to save the tokenizer")
-    ap.add_argument("--vocab_size", type=int, default=8192)
+    ap.add_argument("--vocab_size", type=int, default=4096)
     ap.add_argument("--max_length", type=int, default=1024)
     args = ap.parse_args()
 
