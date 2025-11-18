@@ -1,5 +1,4 @@
-env:
-  TOKENIZERS_PARALLELISM: "false"
+env: {}
 
 main_args:
   model_name_or_path: answerdotai/ModernBERT-base
@@ -17,8 +16,6 @@ main_args:
   mlm_start_prob: 0.3
   mlm_end_prob: 0.15
   mlm_schedule_type: cosine
-  mlm_target_rate: 0.8
-  mlm_rate_concentration: 2.0
   warmup_ratio: 0.05
   logging_steps: 25
   save_steps: 200

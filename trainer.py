@@ -836,9 +836,7 @@ class MultipleLossTrainer(Trainer):
                     if hasattr(self, '_current_step_extra_outputs'):
                         for key, value in self._current_step_extra_outputs.items():
                             if key in tr_extra_scalars:
-                                # 为了在存在梯度累积时得到正确的平均值，
-                                # 这里与 loss 一样，将每个 micro-step 的值按 GA 归一化后累加。
-                                tr_extra_scalars[key] += value / args.gradient_accumulation_steps
+                                tr_extra_scalars[key] += value
 
                     if (
                         args.logging_nan_inf_filter

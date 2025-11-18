@@ -27,7 +27,6 @@ if str(REPO_ROOT) not in sys.path:
 from collator import NTPCollator, LLaDACollator
 from llada.modeling_llada import LLaDAModelLM
 from llada.configuration_llada import LLaDAConfig
-from mlm_schedule import LazyScheduledMLMProbProvider, LazyMLMProbSchedulerCallback
 from trainer import MultipleLossTrainer
 from utils.debug_func import analyze_weights, debug_data
 from utils.load_dataset import get_dataset
@@ -230,18 +229,6 @@ def main():
                         help="每隔多少步进行一次评估。")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--bf16", action='store_true')
-    parser.add_argument("--fp16", action='store_true')
-    parser.add_argument(
-        "--rw_mlm_loss",
-        action="store_true",
-        help="Enable rank-weighted MLM loss (default: off).",
-    )
-    parser.add_argument(
-        "--rank_weight_alpha",
-        type=float,
-        default=2.0,
-        help="Sharpness parameter for rank-weighted MLM loss (larger = more emphasis on top ranks).",
-    )
     parser.add_argument(
         "--disable_tqdm",
         action="store_true",
@@ -276,20 +263,6 @@ def main():
         choices=("low_confidence", "random"),
         help="扩散采样时的重采样策略：'low_confidence' 重试低置信度位置，'random' 随机选择。",
     )
-    # 可选：仅加载模型权重（不加载优化器/调度器），用于阶段二继续训练但更换训练日程
-    parser.add_argument(
-        "--init_model_from_checkpoint",
-        type=str,
-        default=None,
-        help="若提供，将从该checkpoint目录加载模型权重并以新优化器/调度器开始训练；"
-             "不要同时设置 resume_from_checkpoint 以避免加载优化器状态。",
-    )
-    # 可选：目标平均mask率（例如 0.5/0.8）。若不设置，保持原有随机[~0,1]的行为。
-    parser.add_argument("--mlm_target_rate", type=float, default=None,
-                        help="期望的平均mask比例（0-1之间）。不设置则保持原有随机范围。")
-    # 可选：控制mask率的集中度（Beta分布的kappa）。数值越大，方差越小，越接近于平均值。
-    parser.add_argument("--mlm_rate_concentration", type=float, default=2.0,
-                        help="控制mask率采样的集中度（Beta分布kappa）。越大越稳定，越小越发散。")
     parser.add_argument(
         "--resume_from_checkpoint",
         type=str,
@@ -357,38 +330,12 @@ def main():
 
     shared_step = mp.Value('i', 0)
 
-    # 基于训练步数的MLM概率调度器：使用 mlm_start_prob / mlm_end_prob / mlm_schedule_type
-    mlm_prob_provider = LazyScheduledMLMProbProvider(
-        shared_step=shared_step,
-        start_prob=args.mlm_start_prob,
-        end_prob=args.mlm_end_prob,
-        schedule_type=args.mlm_schedule_type,
-    )
-    lazy_prob_scheduler_callback = LazyMLMProbSchedulerCallback(
-        prob_provider=mlm_prob_provider,
-        shared_step=shared_step,
-    )
-
 
     if args.mode == 'llada':
-        if args.init_model_from_checkpoint is not None and args.init_model_from_checkpoint.strip() != "":
-            if is_main_process():
-                logging.info(f"从 checkpoint 加载模型权重（不加载优化器）：{args.init_model_from_checkpoint}")
-            model = LLaDAModelLM.from_pretrained(args.init_model_from_checkpoint)
-            config = model.config
-        else:
-            config = LLaDAConfig.from_pretrained(args.config_path)
-            model = LLaDAModelLM(config,init_params=True)
-        # 将rank-weight相关配置写入config，供模型在前向时使用
-        setattr(model.config, "rank_weight_alpha", float(getattr(args, "rank_weight_alpha", 2.0)))
-        # 可选：启用基于rank的MLM加权损失
-        setattr(model, "rw_mlm_loss", bool(args.rw_mlm_loss))
-        # 注册 AutoClass（可选）
-        try:
-            config.register_for_auto_class()
-            model.register_for_auto_class("AutoModel")
-        except Exception:
-            pass
+        config = LLaDAConfig.from_pretrained(args.config_path)
+        model = LLaDAModelLM(config,init_params=True)
+        config.register_for_auto_class()
+        model.register_for_auto_class("AutoModel")
     elif args.mode == 'llama':
         config = AutoConfig.from_pretrained(args.config_path)
         model = LlamaForCausalLM(config)
@@ -400,29 +347,8 @@ def main():
     if args.mode == 'llama':
         collator = NTPCollator(tokenizer, max_length=args.max_length)
     elif args.mode == 'llada':
-        collator = LLaDACollator(
-            tokenizer=tokenizer,
-            max_length=args.max_length,
-            # 使用调度器控制当前mask比例（旧行为：mlm_start_prob / mlm_end_prob / mlm_schedule_type）
-            mlm_prob_provider=mlm_prob_provider,
-        )
+        collator = LLaDACollator(tokenizer,max_length=args.max_length)
         
-
-    # Determine precision flags
-    use_bf16 = bool(args.bf16)
-    use_fp16 = bool(args.fp16)
-    # If neither specified on CLI, try a sensible default
-    if not use_bf16 and not use_fp16:
-        try:
-            if torch.cuda.is_available():
-                major, _ = torch.cuda.get_device_capability()
-                # Ampere (8.x) or newer generally supports bf16; otherwise fall back to fp16
-                if major >= 8:
-                    use_bf16 = True
-                else:
-                    use_fp16 = True
-        except Exception:
-            pass
 
     training_args = TrainingArguments(
         output_dir=args.output_dir,
@@ -437,8 +363,7 @@ def main():
         save_total_limit=args.save_total_limit,
         data_seed=args.seed,
         seed=args.seed,
-        bf16=use_bf16,
-        fp16=use_fp16,
+        bf16=True,
         adam_beta2 = 0.95,
         weight_decay = 0.1,
         logging_steps=args.logging_steps,
@@ -454,7 +379,7 @@ def main():
         ddp_find_unused_parameters=False,
         # eval_on_start = True,
     )
-    callbacks = [MetricsLoggerCallback(), lazy_prob_scheduler_callback]
+    callbacks = [MetricsLoggerCallback()]
     if args.generation_interval > 0:
         if tokenizer.mask_token_id is None:
             logging.warning("Tokenizer 缺少 mask_token，无法执行文本生成预览，将跳过此功能。")
