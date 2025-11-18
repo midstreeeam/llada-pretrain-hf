@@ -62,6 +62,18 @@ def _normalize_prompt(text: str, strip_newlines: bool) -> str:
     return text
 
 
+def _smart_truncate(text: str, max_chars: int) -> str:
+    if len(text) <= max_chars:
+        return text
+    # Cut to limit
+    text = text[:max_chars]
+    # Find last space to avoid splitting words
+    last_space = text.rfind(" ")
+    if last_space != -1:
+        text = text[:last_space]
+    return text.strip()
+
+
 def load_tinystories_prompts(
     limit: int,
     split: str,
@@ -82,7 +94,7 @@ def load_tinystories_prompts(
         if len(text) < min_chars:
             continue
         if max_chars is not None:
-            text = text[:max_chars].rstrip()
+            text = _smart_truncate(text, max_chars)
         if text:
             prompts.append(text)
         if len(prompts) >= limit:

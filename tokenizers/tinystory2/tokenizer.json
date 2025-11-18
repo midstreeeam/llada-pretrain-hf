@@ -85,7 +85,11 @@
     "type": "Whitespace"
   },
   "post_processor": null,
-  "decoder": null,
+  "decoder": {
+    "type": "WordPiece",
+    "prefix": "##",
+    "cleanup": true
+  },
   "model": {
     "type": "WordPiece",
     "unk_token": "[UNK]",
