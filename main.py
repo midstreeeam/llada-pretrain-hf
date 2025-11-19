@@ -437,6 +437,7 @@ def main():
                     mask_token_id=tokenizer.mask_token_id,
                     remask_strategy=args.generation_remask_strategy,
                     debug_generation=args.generation_debug,
+                    strategy=args.masking_strategy,
                 )
             )
 

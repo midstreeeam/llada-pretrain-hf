@@ -50,7 +50,160 @@ def _get_num_transfer_tokens(mask_index: torch.Tensor, steps: int) -> torch.Tens
             num_transfer_tokens[i, : remainder[i]] += 1
     return num_transfer_tokens
 
+def run_sar_generation(
+    model,
+    input_ids: torch.LongTensor,
+    attention_mask: Optional[torch.Tensor],
+    *,
+    mask_token_id: int,
+    max_new_tokens: int,
+    steps: int,
+    block_size: int,
+    temperature: float,
+    do_sample: bool,
+    top_k: Optional[int],
+    top_p: Optional[float],
+    decode_top_k: Optional[int],
+    remask_strategy: str = "low_confidence",
+    debug: bool,
+    tokenizer=None,
+) -> Tuple[torch.LongTensor, torch.Tensor]:
+    """Run Llada semi-autoregressive generation with block-causal masking."""
+    if remask_strategy not in {"low_confidence", "random"}:
+        raise ValueError(f"Unsupported remask strategy: {remask_strategy}")
 
+    device = input_ids.device
+    batch_size, prompt_len = input_ids.shape
+
+    x = torch.full(
+        (batch_size, prompt_len + max_new_tokens),
+        mask_token_id,
+        dtype=torch.long,
+        device=device,
+    )
+    x[:, :prompt_len] = input_ids.clone()
+
+    fill_steps = torch.zeros(
+        (batch_size, prompt_len + max_new_tokens),
+        dtype=torch.int32,
+        device=device,
+    )
+    fill_steps[:, :prompt_len] = -1
+    
+    # Extend attention_mask (padding mask) with ones for new tokens
+    if attention_mask is not None:
+        attention_mask = torch.cat(
+            [
+                attention_mask,
+                torch.ones((batch_size, max_new_tokens), dtype=attention_mask.dtype, device=device),
+            ],
+            dim=-1,
+        )
+
+    # Construct block-causal attention bias
+    total_len = prompt_len + max_new_tokens
+    block_indices = torch.full((total_len,), -1, dtype=torch.long, device=device)
+    
+    # Assign block indices for new tokens
+    new_token_positions = torch.arange(max_new_tokens, device=device)
+    new_token_blocks = new_token_positions // block_size
+    block_indices[prompt_len:] = new_token_blocks
+    
+    # Create 2D mask: (total_len, total_len)
+    # i attends to j if block[j] <= block[i]
+    causal_mask = (block_indices[None, :] <= block_indices[:, None])
+    
+    dtype = model.dtype if hasattr(model, "dtype") else torch.float32
+    min_dtype = torch.finfo(dtype).min
+    
+    attention_bias = torch.full((batch_size, 1, total_len, total_len), min_dtype, device=device, dtype=dtype)
+    
+    # Apply causal mask
+    base_mask = torch.where(causal_mask, torch.tensor(0.0, dtype=dtype, device=device), torch.tensor(min_dtype, dtype=dtype, device=device))
+    attention_bias[:] = base_mask[None, None, :, :]
+
+    assert max_new_tokens % block_size == 0
+    num_blocks = max_new_tokens // block_size
+    assert steps % num_blocks == 0
+    steps_per_block = steps // num_blocks
+
+    for block_id in range(num_blocks):
+        block_start = prompt_len + block_id * block_size
+        block_end = prompt_len + (block_id + 1) * block_size
+        
+        # Initialize the current block with mask tokens
+        x[:, block_start:block_end] = mask_token_id
+        
+        block_mask_index = (x[:, block_start:block_end] == mask_token_id)
+        num_transfer_tokens = _get_num_transfer_tokens(block_mask_index, steps_per_block)
+
+        for step_idx in range(steps_per_block):
+            mask_index = (x == mask_token_id)
+            # Model forward pass with attention_bias
+            outputs = model(x, attention_mask=attention_mask, attention_bias=attention_bias)
+            logits = outputs.logits
+
+            if temperature > 0:
+                logits_with_noise = _add_gumbel_noise(logits, temperature)
+            else:
+                logits_with_noise = logits
+
+            if do_sample:
+                sample_logits = logits_with_noise if temperature > 0 else logits
+                probs = torch.softmax(sample_logits, dim=-1)
+                x0 = torch.multinomial(probs.view(-1, probs.size(-1)), 1).view(probs.shape[0], probs.shape[1])
+            else:
+                x0 = torch.argmax(logits_with_noise, dim=-1)
+
+            probs = torch.softmax(logits, dim=-1)
+            gathered = torch.gather(probs, dim=-1, index=x0.unsqueeze(-1)).squeeze(-1)
+
+            x0 = torch.where(mask_index, x0, x)
+            confidence = torch.where(mask_index, gathered, torch.tensor(-float("inf"), device=device))
+
+            confidence[:, :block_start] = -float("inf")
+            confidence[:, block_end:] = -float("inf")
+
+            transfer_index = torch.zeros_like(confidence, dtype=torch.bool)
+            for b in range(batch_size):
+                available = torch.nonzero(mask_index[b, block_start:block_end], as_tuple=False).squeeze(-1)
+                if available.numel() == 0:
+                    continue
+
+                k = max(0, int(num_transfer_tokens[b, step_idx].item()))
+                if decode_top_k is not None and decode_top_k > 0:
+                    k = min(k, decode_top_k)
+                k = min(k, available.numel())
+                if k == 0:
+                    continue
+
+                if remask_strategy == "random":
+                    chosen = available[torch.randperm(available.numel(), device=device)[:k]]
+                else:
+                    block_conf = confidence[b, block_start:block_end][available]
+                    top_vals, top_idx = torch.topk(block_conf, k, dim=-1)
+                    chosen = available[top_idx]
+
+                transfer_index[b, block_start:block_end][chosen] = True
+
+            updated_positions = transfer_index & mask_index
+            x = torch.where(updated_positions, x0, x)
+            step_counter = block_id * steps_per_block + step_idx + 1
+            if updated_positions.any():
+                fill_steps[updated_positions] = step_counter
+
+            if debug and tokenizer is not None:
+                logger = logging.getLogger(__name__)
+                changed = updated_positions.nonzero(as_tuple=False)
+                if changed.numel() > 0:
+                    logger.info(
+                        "[debug] block %d step %d: updated %d positions.",
+                        block_id + 1,
+                        step_idx + 1,
+                        changed.size(0),
+                    )
+
+    return x, fill_steps
 def run_diffusion_generation(
     model,
     input_ids: torch.LongTensor,
@@ -90,6 +243,7 @@ def run_diffusion_generation(
         device=device,
     )
     fill_steps[:, :prompt_len] = -1
+
     # Extend attention_mask (padding mask) with ones for new tokens
     if attention_mask is not None:
         attention_mask = torch.cat(
@@ -100,47 +254,12 @@ def run_diffusion_generation(
             dim=-1,
         )
 
-    # Construct block-causal attention bias
-    # Prompt tokens get block index -1
-    # New tokens get block indices 0, 1, ...
-    
+    # Standard diffusion: Bidirectional attention
+    # We must explicitly provide attention_bias=0.0 (full attention)
+    # to prevent the model from defaulting to causal attention.
     total_len = prompt_len + max_new_tokens
-    block_indices = torch.full((total_len,), -1, dtype=torch.long, device=device)
-    
-    # Assign block indices for new tokens
-    # 0 to max_new_tokens-1
-    new_token_positions = torch.arange(max_new_tokens, device=device)
-    new_token_blocks = new_token_positions // block_size
-    block_indices[prompt_len:] = new_token_blocks
-    
-    # Create 2D mask: (total_len, total_len)
-    # i attends to j if block[j] <= block[i]
-    # shape: (1, total_len) <= (total_len, 1)
-    causal_mask = (block_indices[None, :] <= block_indices[:, None])
-    
-    # Convert to float mask (0.0 for True, min_dtype for False)
-    # LLaDA model expects added attention_bias or mask
-    # Usually: 0.0 for attend, -inf for mask
     dtype = model.dtype if hasattr(model, "dtype") else torch.float32
-    min_dtype = torch.finfo(dtype).min
-    
-    attention_bias = torch.full((batch_size, 1, total_len, total_len), min_dtype, device=device, dtype=dtype)
-    
-    # Apply causal mask
-    # We need to expand causal_mask to batch size
-    # causal_mask is (total_len, total_len)
-    # We want to set positions where causal_mask is True to 0.0
-    
-    # But we also need to respect the input `attention_mask` (padding mask for prompt)
-    # input attention_mask is (batch, prompt_len) with 1=keep, 0=mask
-    
-    # Let's initialize with the causal mask
-    # True -> 0.0, False -> min_dtype
-    base_mask = torch.where(causal_mask, torch.tensor(0.0, dtype=dtype, device=device), torch.tensor(min_dtype, dtype=dtype, device=device))
-    attention_bias[:] = base_mask[None, None, :, :]
-    
-    # Note: We do NOT need to add the prompt padding mask to attention_bias here,
-    # because modeling_llada.py will add attention_mask (padding) to attention_bias automatically.
+    attention_bias = torch.zeros((batch_size, 1, total_len, total_len), device=device, dtype=dtype)
 
     assert max_new_tokens % block_size == 0
     num_blocks = max_new_tokens // block_size
@@ -150,20 +269,12 @@ def run_diffusion_generation(
     for block_id in range(num_blocks):
         block_start = prompt_len + block_id * block_size
         block_end = prompt_len + (block_id + 1) * block_size
-        
-        # Initialize the current block with mask tokens
-        x[:, block_start:block_end] = mask_token_id
-        
-        # For the current block, we want to run diffusion steps
-        # ...
-        
         block_mask_index = (x[:, block_start:block_end] == mask_token_id)
         num_transfer_tokens = _get_num_transfer_tokens(block_mask_index, steps_per_block)
 
         for step_idx in range(steps_per_block):
             mask_index = (x == mask_token_id)
-            # Model forward pass
-            # Pass both attention_mask (padding) and attention_bias (causal structure)
+            # Model forward pass with full attention bias
             outputs = model(x, attention_mask=attention_mask, attention_bias=attention_bias)
             logits = outputs.logits
 
@@ -266,6 +377,7 @@ class GenerationPreviewCallback(TrainerCallback):
         mask_token_id: Optional[int],
         remask_strategy: str,
         debug_generation: bool,
+        strategy: str = "random", # added strategy
         preview_log_path: Optional[str] = None,
     ) -> None:
         self.tokenizer = tokenizer
@@ -283,6 +395,7 @@ class GenerationPreviewCallback(TrainerCallback):
         self.remask_strategy = remask_strategy
         self.trainer = None
         self.debug_generation = debug_generation
+        self.strategy = strategy
         self.preview_log_path = preview_log_path
 
         encoded = tokenizer(
@@ -318,7 +431,13 @@ class GenerationPreviewCallback(TrainerCallback):
         was_training = unwrapped.training
         unwrapped.eval()
         with torch.inference_mode():
-            generated_sequences, fill_steps = run_diffusion_generation(
+            # Dispatch based on strategy
+            if self.strategy in ["semi_autoregressive", "semi_autoregressive_parallel"]:
+                gen_func = run_sar_generation
+            else:
+                gen_func = run_diffusion_generation
+
+            generated_sequences, fill_steps = gen_func(
                 unwrapped,
                 input_ids=input_ids,
                 attention_mask=attention_mask,
@@ -431,4 +550,5 @@ class GenerationPreviewCallback(TrainerCallback):
 __all__ = [
     "GenerationPreviewCallback",
     "run_diffusion_generation",
+    "run_sar_generation",
 ]
