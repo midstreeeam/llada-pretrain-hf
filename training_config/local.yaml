@@ -13,9 +13,8 @@ main_args:
   per_device_eval_batch_size: 32
   gradient_accumulation_steps: 2
   max_length: 256
-  mlm_start_prob: 0.3
-  mlm_end_prob: 0.15
-  mlm_schedule_type: cosine
+  masking_strategy: semi_autoregressive_parallel
+  block_size: 4
   warmup_ratio: 0.05
   logging_steps: 25
   save_steps: 200

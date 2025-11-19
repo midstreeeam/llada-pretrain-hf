@@ -208,6 +208,10 @@ def main():
 
     # 数据处理参数
     parser.add_argument("--max_length", type=int, default=512, help="输入序列的最大长度。")
+    parser.add_argument("--masking_strategy", type=str, default="random",
+                        choices=["random", "semi_autoregressive", "semi_autoregressive_parallel"],
+                        help="MLM masking strategy.")
+    parser.add_argument("--block_size", type=int, default=64, help="Block size for semi-autoregressive masking.")
 
     # TrainingArguments 参数
     parser.add_argument("--num_train_epochs", type=int, default=1)
@@ -347,7 +351,12 @@ def main():
     if args.mode == 'llama':
         collator = NTPCollator(tokenizer, max_length=args.max_length)
     elif args.mode == 'llada':
-        collator = LLaDACollator(tokenizer,max_length=args.max_length)
+        collator = LLaDACollator(
+            tokenizer,
+            max_length=args.max_length,
+            masking_strategy=args.masking_strategy,
+            block_size=args.block_size
+        )
         
 
     training_args = TrainingArguments(

@@ -23,9 +23,9 @@ main_args:
   gradient_accumulation_steps: 1
   max_length: 512
 
-  # Semi-Autoregressive Strategy
-  masking_strategy: semi_autoregressive
-  block_size: 1
+  # Semi-Autoregressive Parallel Strategy (Fast Training)
+  masking_strategy: semi_autoregressive_parallel
+  block_size: 2
 
   warmup_ratio: 0.02
 

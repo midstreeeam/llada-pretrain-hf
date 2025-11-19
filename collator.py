@@ -119,11 +119,11 @@ class LLaDACollator:
     """
     
     def __init__(
-        self, 
+        self,
         tokenizer: PreTrainedTokenizer,
         max_length: int = 512,
         text_key: str = 'text',
-        masking_strategy: str = "random", # random or semi_autoregressive
+        masking_strategy: str = "random", # random, semi_autoregressive, or semi_autoregressive_parallel
         block_size: int = 64,
     ):
         
@@ -193,6 +193,8 @@ class LLaDACollator:
 
             if self.masking_strategy == "semi_autoregressive":
                 masked_input_ids, labels, attention_mask, current_mlm_prob = self._mask_tokens_sar(input_ids)
+            elif self.masking_strategy == "semi_autoregressive_parallel":
+                masked_input_ids, labels, attention_mask, current_mlm_prob = self._mask_tokens_sar_parallel(input_ids)
             else:
                 current_mlm_prob = self._get_mlm_probability()  # 为每个样本获取MLM概率
                 # 创建MLM mask和labels
@@ -209,18 +211,50 @@ class LLaDACollator:
         
         # Padding处理
         batch_input_ids = self._pad_sequences(batch_input_ids, self.pad_token_id)
-        batch_attention_mask = self._pad_sequences(batch_attention_mask, 0)
         batch_labels = self._pad_sequences(batch_labels, -100)
 
-  
- 
-        return {
-            'input_ids': torch.tensor(batch_input_ids, dtype=torch.long),
-            'attention_mask': torch.tensor(batch_attention_mask, dtype=torch.long),
-            'labels': torch.tensor(batch_labels, dtype=torch.long),
-            'current_mlm_prob': torch.tensor(batch_mlm_probs, dtype=torch.float),  # 使用列表转换
-            'return_dict': True,
-        }
+        # Handle attention masks based on strategy
+        if self.masking_strategy == "semi_autoregressive_parallel":
+            # For 2D attention masks, we need to pad them to match the padded sequence length
+            max_seq_len = len(batch_input_ids[0])  # All sequences should be same length after padding
+
+            # Pad each 2D attention mask to max_seq_len x max_seq_len
+            padded_attention_masks = []
+            for attn_mask in batch_attention_mask:
+                current_len = len(attn_mask)
+                if current_len < max_seq_len:
+                    # Create a larger mask and copy the existing values
+                    padded_mask = torch.zeros((max_seq_len, max_seq_len), dtype=torch.int)
+                    padded_mask[:current_len, :current_len] = torch.tensor(attn_mask, dtype=torch.int)
+                    padded_attention_masks.append(padded_mask)
+                else:
+                    padded_attention_masks.append(torch.tensor(attn_mask, dtype=torch.int))
+
+            # Convert to 4D attention_bias format expected by the model: (batch_size, 1, seq_len, seq_len)
+            attention_bias_tensor = torch.stack(padded_attention_masks, dim=0).unsqueeze(1).float()
+            # Convert 1s to 0s and 0s to -inf for attention bias
+            attention_bias_tensor = torch.where(attention_bias_tensor == 1, 0.0, float('-inf'))
+
+            return {
+                'input_ids': torch.tensor(batch_input_ids, dtype=torch.long),
+                'attention_mask': torch.ones((len(batch_input_ids), max_seq_len), dtype=torch.long),  # Standard attention mask (no padding masking)
+                'attention_bias': attention_bias_tensor,
+                'labels': torch.tensor(batch_labels, dtype=torch.long),
+                'current_mlm_prob': torch.tensor(batch_mlm_probs, dtype=torch.float),  # 使用列表转换
+                'return_dict': True,
+            }
+        else:
+            # For 1D attention masks, pad normally
+            batch_attention_mask_padded = self._pad_sequences(batch_attention_mask, 0)
+            attention_mask_tensor = torch.tensor(batch_attention_mask_padded, dtype=torch.long)
+
+            return {
+                'input_ids': torch.tensor(batch_input_ids, dtype=torch.long),
+                'attention_mask': attention_mask_tensor,
+                'labels': torch.tensor(batch_labels, dtype=torch.long),
+                'current_mlm_prob': torch.tensor(batch_mlm_probs, dtype=torch.float),  # 使用列表转换
+                'return_dict': True,
+            }
     
     def _get_mlm_probability(self, eps: float = 1e-3) -> float:
         t = random.uniform(0, 1)
@@ -289,6 +323,43 @@ class LLaDACollator:
         # This isn't really "MLM prob" but "Progress"
         current_progress = block_start / seq_len
         
+        return input_ids, labels, attention_mask, current_progress
+
+    def _mask_tokens_sar_parallel(self, input_ids: List[int]) -> tuple:
+        """
+        Semi-Autoregressive Parallel masking strategy.
+        Uses block-causal attention mask to train all blocks in parallel.
+        Each block can only attend to previous blocks.
+        """
+        seq_len = len(input_ids)
+        labels = input_ids.copy()  # Full sequence as labels
+
+        # Determine start index for blocks. Usually after BOS.
+        start_idx = 1 if input_ids[0] == self.bos_token_id else 0
+
+        # Create block indices for each position
+        block_indices = []
+        for i in range(seq_len):
+            if i < start_idx:
+                block_indices.append(-1)  # Special tokens (BOS, etc.)
+            else:
+                block_idx = (i - start_idx) // self.block_size
+                block_indices.append(block_idx)
+
+        # Create 2D attention mask: (seq_len, seq_len)
+        # token i can attend to token j if block_indices[j] < block_indices[i]
+        attention_mask = torch.zeros((seq_len, seq_len), dtype=torch.int)
+        for i in range(seq_len):
+            for j in range(seq_len):
+                if block_indices[j] < block_indices[i]:
+                    attention_mask[i, j] = 1
+
+        # Convert to list format for compatibility with existing padding logic
+        attention_mask = attention_mask.tolist()
+
+        # For logging/scheduler compatibility
+        current_progress = 1.0  # All positions are used for training
+
         return input_ids, labels, attention_mask, current_progress
 
     def _mask_tokens(self, input_ids: List[int], current_mlm_prob ) -> tuple:
