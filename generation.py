@@ -110,8 +110,9 @@ def run_sar_generation(
     block_indices[prompt_len:] = new_token_blocks
     
     # Create 2D mask: (total_len, total_len)
-    # i attends to j if block[j] <= block[i]
-    causal_mask = (block_indices[None, :] <= block_indices[:, None])
+    # i attends to j if block[j] < block[i]
+    # (Strictly causal between blocks, matching training)
+    causal_mask = (block_indices[None, :] < block_indices[:, None])
     
     dtype = model.dtype if hasattr(model, "dtype") else torch.float32
     min_dtype = torch.finfo(dtype).min
@@ -121,6 +122,11 @@ def run_sar_generation(
     # Apply causal mask
     base_mask = torch.where(causal_mask, torch.tensor(0.0, dtype=dtype, device=device), torch.tensor(min_dtype, dtype=dtype, device=device))
     attention_bias[:] = base_mask[None, None, :, :]
+
+    # Unmask the prompt region to allow full self-attention within the prompt
+    # (Prompt tokens have block_index -1, so they satisfy -1 < 0 for new tokens,
+    # but -1 < -1 is False, so they would be masked to themselves without this)
+    attention_bias[:, :, :prompt_len, :prompt_len] = 0.0
 
     assert max_new_tokens % block_size == 0
     num_blocks = max_new_tokens // block_size
