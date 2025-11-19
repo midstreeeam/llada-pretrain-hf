@@ -41,7 +41,7 @@ main_args:
   generation_max_new_tokens: 64
   generation_num_diffusion_steps: 32
   generation_temperature: 1.0
-  generation_block_size: 64
+  generation_block_size: 2
   generation_decode_top_k: 0
   generation_remask_strategy: low_confidence
   generation_prompts:

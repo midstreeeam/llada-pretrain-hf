@@ -340,12 +340,9 @@ class LLaDACollator:
         # Exclude BOS from loss computation
         if start_idx > 0:
             labels[0] = -100
+            
+        masked_input_ids = input_ids[:]
         
-        # Mask all tokens (except BOS) in the input
-        masked_input_ids = input_ids.copy()
-        for i in range(start_idx, seq_len):
-            masked_input_ids[i] = self.mask_token_id
-
         # Create block indices for each position
         # Vectorized implementation for speed
         positions = torch.arange(seq_len)
@@ -356,9 +353,11 @@ class LLaDACollator:
             block_indices[start_idx:] = (valid_pos - start_idx) // self.block_size
 
         # Create 2D attention mask: (seq_len, seq_len)
-        # Token i can attend to token j if block_indices[j] <= block_indices[i]
-        # Use broadcasting: (1, seq_len) <= (seq_len, 1) -> (seq_len, seq_len)
-        attention_mask = (block_indices[None, :] <= block_indices[:, None]).int()
+        # Token i can attend to token j if block_indices[j] < block_indices[i]
+        # This enforces that tokens in block k can only attend to blocks 0...k-1
+        # They cannot attend to their own block (conditional independence within block)
+        # Use broadcasting: (1, seq_len) < (seq_len, 1) -> (seq_len, seq_len)
+        attention_mask = (block_indices[None, :] < block_indices[:, None]).int()
 
         # Convert to list format for compatibility with existing padding logic
         attention_mask = attention_mask.tolist()
