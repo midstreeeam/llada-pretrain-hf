@@ -2,10 +2,10 @@
 """
 PYTHONPATH=$(pwd) python3 sundries/visualize_generation.py \
     --prompt "One day," \
-    --output "generation_refined.gif" \
+    --output "generation_sar.gif" \
     --steps 64 \
-    --max-new 128 \
-    --remask-strategy refinement
+    --max-new 64 \
+    --block-size 32
 """
 
 import argparse
@@ -220,6 +220,7 @@ def main():
     parser.add_argument("--checkpoint", type=str, default="output/llada_40m_dl/checkpoint-463694")
     parser.add_argument("--prompt", type=str, default="Once upon a time")
     parser.add_argument("--max-new", type=int, default=64)
+    parser.add_argument("--block-size", type=int, default=0, help="Block size for semi-autoregressive generation. If 0, uses max-new.")
     parser.add_argument("--steps", type=int, default=64)
     parser.add_argument("--output", type=str, default="generation.gif")
     parser.add_argument("--temperature", type=float, default=1.0)
@@ -251,6 +252,8 @@ def main():
     # Use sep_token_id if eos_token_id is None (common for some BERT models)
     eos_id = tokenizer.eos_token_id if tokenizer.eos_token_id is not None else tokenizer.sep_token_id
     
+    block_size = args.block_size if args.block_size > 0 else args.max_new
+
     with torch.inference_mode():
         history = run_diffusion_generation_with_history(
             model,
@@ -259,7 +262,7 @@ def main():
             mask_token_id=tokenizer.mask_token_id,
             max_new_tokens=args.max_new,
             steps=args.steps,
-            block_size=args.max_new,
+            block_size=block_size,
             temperature=args.temperature,
             do_sample=args.sample,
             top_k=None,
