@@ -7,8 +7,8 @@
 
   "d_model": 512,
   "n_layers": 16,
-  "n_heads": 4,
-  "n_kv_heads": 4,
+  "n_heads": 8,
+  "n_kv_heads": 8,
   "mlp_hidden_size": 1536,
   "vocab_size": 4096,
   "embedding_size": 4096,
