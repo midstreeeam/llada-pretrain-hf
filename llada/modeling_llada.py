@@ -720,21 +720,6 @@ class LLaDABlock(nn.Module):
 
         # Get the attention scores.
         # shape: (B, nh, T, hs)
-        if self.layer_id == 0 and self.training:
-             if attention_bias is None:
-                 print(f"[DEBUG] Layer {self.layer_id}: attention_bias is None!")
-             else:
-                 print(f"[DEBUG] Layer {self.layer_id}: attention_bias shape: {attention_bias.shape}")
-                 # Check diagonal (should be masked/negative)
-                 diag_val = attention_bias[0, 0, 1, 1].item()
-                 # Check off-diagonal (should be masked/negative for t1->t0)
-                 # t1 is idx 2, t0 is idx 1.
-                 # But wait, input is [BOS, t0, t1].
-                 # t0 is idx 1. t1 is idx 2.
-                 # t1->t0: [2, 1].
-                 off_diag_val = attention_bias[0, 0, 2, 1].item()
-                 print(f"[DEBUG] Layer {self.layer_id}: diag[1,1]={diag_val}, off[2,1]={off_diag_val}")
-
         att = self._scaled_dot_product_attention(
             q,
             k,

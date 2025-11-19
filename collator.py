@@ -331,41 +331,81 @@ class LLaDACollator:
         Uses block-causal attention mask to train all blocks in parallel.
         Each block can only attend to previous blocks and itself.
         """
+
         seq_len = len(input_ids)
-        labels = input_ids.copy()  # Full sequence as labels
         
+        # Convert input_ids to tensor for efficient operations
+        input_ids_tensor = torch.tensor(input_ids, dtype=torch.long)
+
         # Determine start index for blocks. Usually after BOS.
-        start_idx = 1 if input_ids[0] == self.bos_token_id else 0
+        start_idx = 1 if input_ids_tensor[0] == self.bos_token_id else 0
         
-        # Exclude BOS from loss computation
-        if start_idx > 0:
-            labels[0] = -100
-            
-        masked_input_ids = input_ids[:]
-        
-        # Create block indices for each position
-        # Vectorized implementation for speed
+        # Create block indices
         positions = torch.arange(seq_len)
         block_indices = torch.full((seq_len,), -1, dtype=torch.long)
-        
         if seq_len > start_idx:
             valid_pos = positions[start_idx:]
             block_indices[start_idx:] = (valid_pos - start_idx) // self.block_size
 
-        # Create 2D attention mask: (seq_len, seq_len)
-        # Token i can attend to token j if block_indices[j] < block_indices[i]
-        # This enforces that tokens in block k can only attend to blocks 0...k-1
-        # They cannot attend to their own block (conditional independence within block)
-        # Use broadcasting: (1, seq_len) < (seq_len, 1) -> (seq_len, seq_len)
-        attention_mask = (block_indices[None, :] < block_indices[:, None]).int()
+        # Determine max block index
+        max_block_idx = block_indices.max().item()
+        
+        # Checkerboard Masking: Randomly choose to mask Even or Odd blocks
+        # This allows training 50% of blocks in parallel.
+        # Masked blocks predict targets. Unmasked blocks provide context.
+        parity = torch.randint(0, 2, (1,)).item()
+        
+        masked_input_ids = input_ids_tensor.clone()
+        labels = input_ids_tensor.clone()
+        
+        # Create mask for positions that should be masked (matching parity)
+        # Ignore -1 (BOS/special tokens)
+        mask_condition = (block_indices != -1) & (block_indices % 2 == parity)
+        
+        # Apply masking
+        masked_input_ids[mask_condition] = self.mask_token_id
+        
+        # Set labels: -100 for unmasked (context) tokens and special tokens
+        # We only train on the masked tokens
+        labels[~mask_condition] = -100
+        
+        # Also ensure BOS is -100 (already handled by ~mask_condition since block_idx=-1)
+        # But explicitly for safety if logic changes
+        labels[0] = -100
 
-        # Convert to list format for compatibility with existing padding logic
-        attention_mask = attention_mask.tolist()
+        # Create 2D attention mask
+        # i attends to j if block[j] < block[i]
+        # AND we must allow attending to context (unmasked) blocks.
+        # The original logic (block[j] < block[i]) handles this:
+        # If Block i is Masked (e.g. 2), it attends to Block 1 (Unmasked). 1 < 2.
+        # If Block i is Masked (e.g. 2), it does NOT attend to Block 2. 2 < 2 False.
+        # So the logic remains valid.
+        
+        # Vectorized attention mask creation
+        # shape: (seq_len, seq_len)
+        # 1 means attend, 0 means mask (will be converted to -inf)
+        attention_mask = (block_indices[None, :] < block_indices[:, None]).int()
+        
+        # Allow attending to special tokens (block_idx = -1)
+        # Any token should attend to BOS (idx 0)
+        # block_indices[0] is -1. block_indices[i] >= 0.
+        # -1 < 0. True. So BOS is visible.
+        
+        # What about BOS attending to itself?
+        # -1 < -1 False.
+        # So BOS cannot see itself?
+        # We should allow BOS to see itself.
+        # And generally, special tokens should see themselves?
+        # Or maybe it doesn't matter since we don't predict BOS.
+        # But for stability, let's allow diagonal for special tokens.
+        special_tokens_mask = (block_indices == -1)
+        attention_mask[special_tokens_mask, special_tokens_mask] = 1
 
         # For logging/scheduler compatibility
-        current_progress = 1.0  # All positions are used for training
+        # This is an approximation of how much of the sequence is being predicted
+        current_mlm_prob = mask_condition.float().mean().item() if mask_condition.any() else 0.0
 
-        return masked_input_ids, labels, attention_mask, current_progress
+        return masked_input_ids.tolist(), labels.tolist(), attention_mask.tolist(), current_mlm_prob
 
     def _mask_tokens(self, input_ids: List[int], current_mlm_prob ) -> tuple:
         """
