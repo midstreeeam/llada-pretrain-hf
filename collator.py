@@ -347,23 +347,18 @@ class LLaDACollator:
             masked_input_ids[i] = self.mask_token_id
 
         # Create block indices for each position
-        block_indices = []
-        for i in range(seq_len):
-            if i < start_idx:
-                block_indices.append(-1)  # Special tokens (BOS, etc.)
-            else:
-                block_idx = (i - start_idx) // self.block_size
-                block_indices.append(block_idx)
+        # Vectorized implementation for speed
+        positions = torch.arange(seq_len)
+        block_indices = torch.full((seq_len,), -1, dtype=torch.long)
+        
+        if seq_len > start_idx:
+            valid_pos = positions[start_idx:]
+            block_indices[start_idx:] = (valid_pos - start_idx) // self.block_size
 
         # Create 2D attention mask: (seq_len, seq_len)
-        # Token i can attend to token j if:
-        # 1. j is in an earlier block (block_indices[j] < block_indices[i])
-        # 2. j is in the same block (block_indices[j] == block_indices[i])
-        attention_mask = torch.zeros((seq_len, seq_len), dtype=torch.int)
-        for i in range(seq_len):
-            for j in range(seq_len):
-                if block_indices[j] <= block_indices[i]:  # FIX: Use <= instead of <
-                    attention_mask[i, j] = 1
+        # Token i can attend to token j if block_indices[j] <= block_indices[i]
+        # Use broadcasting: (1, seq_len) <= (seq_len, 1) -> (seq_len, seq_len)
+        attention_mask = (block_indices[None, :] <= block_indices[:, None]).int()
 
         # Convert to list format for compatibility with existing padding logic
         attention_mask = attention_mask.tolist()
