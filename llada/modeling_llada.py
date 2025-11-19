@@ -666,7 +666,7 @@ class LLaDABlock(nn.Module):
                 q,
                 k,
                 v,
-                attn_mask=None,
+                attn_mask=attn_mask,
                 dropout_p=dropout_p,
                 is_causal=False,
             )
@@ -724,7 +724,7 @@ class LLaDABlock(nn.Module):
             q,
             k,
             v,
-            attn_mask=None,
+            attn_mask=attention_bias,
             dropout_p=0.0 if not self.training else self.config.attention_dropout,
             is_causal=False,
         )
