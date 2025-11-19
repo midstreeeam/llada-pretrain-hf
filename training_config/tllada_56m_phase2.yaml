@@ -49,7 +49,7 @@ main_args:
     - "In a quiet village by the sea,"
 
   # Point this to your Phase 1 checkpoint when available
-  # init_model_from_checkpoint: "{repo_dir}/output/tllada_56m_dl/checkpoint-XXXXXX"
+  init_model_from_checkpoint: "{repo_dir}/output/tllada_56m_dl/checkpoint-264968"
   resume_from_checkpoint: null
 
   save_safetensors: false
