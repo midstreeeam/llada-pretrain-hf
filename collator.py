@@ -123,12 +123,17 @@ class LLaDACollator:
         tokenizer: PreTrainedTokenizer,
         max_length: int = 512,
         text_key: str = 'text',
+        masking_strategy: str = "random", # random or semi_autoregressive
+        block_size: int = 64,
     ):
         
         self.tokenizer = tokenizer
         
         self.max_length = max_length
         self.text_key = text_key  # 保存text_key
+        self.masking_strategy = masking_strategy
+        self.block_size = block_size
+
         # 获取特殊token的id
         self.mask_token_id = tokenizer.mask_token_id
         self.pad_token_id = tokenizer.pad_token_id
@@ -186,17 +191,17 @@ class LLaDACollator:
                 input_ids = input_ids[:self.max_length]
 
 
-
-
-            current_mlm_prob = self._get_mlm_probability()  # 为每个样本获取MLM概率
+            if self.masking_strategy == "semi_autoregressive":
+                masked_input_ids, labels, attention_mask, current_mlm_prob = self._mask_tokens_sar(input_ids)
+            else:
+                current_mlm_prob = self._get_mlm_probability()  # 为每个样本获取MLM概率
+                # 创建MLM mask和labels
+                masked_input_ids, labels = self._mask_tokens(input_ids, current_mlm_prob)
+                # 创建attention mask
+                attention_mask = [1] * len(masked_input_ids)
+            
             batch_mlm_probs.append(current_mlm_prob)  # 添加到列表中
-            
-            # 创建MLM mask和labels
-            masked_input_ids, labels = self._mask_tokens(input_ids, current_mlm_prob)
-         
-            # 创建attention mask
-            attention_mask = [1] * len(masked_input_ids)
-            
+
             batch_input_ids.append(masked_input_ids)
             batch_attention_mask.append(attention_mask)
             batch_labels.append(labels)
@@ -222,6 +227,69 @@ class LLaDACollator:
         # 这是一个简单的线性噪声调度
         p_mask = (1 - eps) * t + eps
         return p_mask
+
+    def _mask_tokens_sar(self, input_ids: List[int]) -> tuple:
+        """
+        Semi-Autoregressive masking strategy.
+        Randomly selects a block to mask, keeping history visible and future hidden.
+        """
+        labels = [-100] * len(input_ids)
+        attention_mask = [1] * len(input_ids)
+        
+        # Calculate number of blocks
+        # We don't want to mask BOS (idx 0), so effective length is len - 1
+        # But simplicity: just chunk the whole sequence
+        seq_len = len(input_ids)
+        
+        # Determine start index for blocks. Usually after BOS.
+        start_idx = 1 if input_ids[0] == self.bos_token_id else 0
+        
+        effective_len = seq_len - start_idx
+        if effective_len <= 0:
+            return input_ids, labels, attention_mask, 0.0
+
+        # Randomly select a split point
+        # We want to split at: start_idx + k * block_size
+        # max_blocks = math.ceil(effective_len / self.block_size)
+        
+        # We want to pick a target block index [0, max_blocks-1]
+        # If we pick block k:
+        #   History: 0 to start_idx + k * block_size (Visible)
+        #   Target:  start_idx + k * block_size to start_idx + (k+1) * block_size (Masked & Labelled)
+        #   Future:  start_idx + (k+1) * block_size to end (Masked & Hidden/Ignored)
+        
+        # However, training is more efficient if we just pick a random cut point?
+        # No, sticking to block grid is better for consistency with inference.
+        
+        num_possible_blocks = (effective_len + self.block_size - 1) // self.block_size
+        if num_possible_blocks == 0:
+             # Sequence too short, just mask everything after BOS?
+             target_block_idx = 0
+        else:
+             target_block_idx = random.randint(0, num_possible_blocks - 1)
+             
+        block_start = start_idx + target_block_idx * self.block_size
+        block_end = min(start_idx + (target_block_idx + 1) * self.block_size, seq_len)
+        
+        # 1. Mask and Label the Target Block
+        for i in range(block_start, block_end):
+            labels[i] = input_ids[i]
+            input_ids[i] = self.mask_token_id
+            
+        # 2. Mask and Hide the Future
+        # Future starts at block_end
+        for i in range(block_end, seq_len):
+            input_ids[i] = self.mask_token_id # Mask future tokens
+            attention_mask[i] = 0             # Hide future tokens from attention
+            labels[i] = -100                  # Do not compute loss for future
+            
+        # 3. History (0 to block_start) remains untouched (input_ids correct, labels -100, attn 1)
+        
+        # Calculate effective mask probability for logging/scheduler (approximate)
+        # This isn't really "MLM prob" but "Progress"
+        current_progress = block_start / seq_len
+        
+        return input_ids, labels, attention_mask, current_progress
 
     def _mask_tokens(self, input_ids: List[int], current_mlm_prob ) -> tuple:
         """
