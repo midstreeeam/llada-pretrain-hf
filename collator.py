@@ -329,13 +329,22 @@ class LLaDACollator:
         """
         Semi-Autoregressive Parallel masking strategy.
         Uses block-causal attention mask to train all blocks in parallel.
-        Each block can only attend to previous blocks.
+        Each block can only attend to previous blocks and itself.
         """
         seq_len = len(input_ids)
         labels = input_ids.copy()  # Full sequence as labels
-
+        
         # Determine start index for blocks. Usually after BOS.
         start_idx = 1 if input_ids[0] == self.bos_token_id else 0
+        
+        # Exclude BOS from loss computation
+        if start_idx > 0:
+            labels[0] = -100
+        
+        # Mask all tokens (except BOS) in the input
+        masked_input_ids = input_ids.copy()
+        for i in range(start_idx, seq_len):
+            masked_input_ids[i] = self.mask_token_id
 
         # Create block indices for each position
         block_indices = []
@@ -347,11 +356,13 @@ class LLaDACollator:
                 block_indices.append(block_idx)
 
         # Create 2D attention mask: (seq_len, seq_len)
-        # token i can attend to token j if block_indices[j] < block_indices[i]
+        # Token i can attend to token j if:
+        # 1. j is in an earlier block (block_indices[j] < block_indices[i])
+        # 2. j is in the same block (block_indices[j] == block_indices[i])
         attention_mask = torch.zeros((seq_len, seq_len), dtype=torch.int)
         for i in range(seq_len):
             for j in range(seq_len):
-                if block_indices[j] < block_indices[i]:
+                if block_indices[j] <= block_indices[i]:  # FIX: Use <= instead of <
                     attention_mask[i, j] = 1
 
         # Convert to list format for compatibility with existing padding logic
@@ -360,7 +371,7 @@ class LLaDACollator:
         # For logging/scheduler compatibility
         current_progress = 1.0  # All positions are used for training
 
-        return input_ids, labels, attention_mask, current_progress
+        return masked_input_ids, labels, attention_mask, current_progress
 
     def _mask_tokens(self, input_ids: List[int], current_mlm_prob ) -> tuple:
         """
