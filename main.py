@@ -273,6 +273,12 @@ def main():
         default=None,
         help="从指定 checkpoint 继续训练。若未指定则在输出目录内自动搜索。",
     )
+    parser.add_argument(
+        "--init_model_from_checkpoint",
+        type=str,
+        default=None,
+        help="Initialize model weights from a specific checkpoint (e.g. Phase 1 model).",
+    )
 
     args = parser.parse_args()
 
@@ -337,7 +343,20 @@ def main():
 
     if args.mode == 'llada':
         config = LLaDAConfig.from_pretrained(args.config_path)
-        model = LLaDAModelLM(config,init_params=True)
+        
+        if args.init_model_from_checkpoint:
+            if is_main_process():
+                logging.info(f"Initializing model weights from: {args.init_model_from_checkpoint}")
+            # Use from_pretrained to load weights, but use the current config
+            # We set ignore_mismatched_sizes=True just in case, though for same architecture it shouldn't be needed
+            model = LLaDAModelLM.from_pretrained(
+                args.init_model_from_checkpoint, 
+                config=config, 
+                ignore_mismatched_sizes=True
+            )
+        else:
+            model = LLaDAModelLM(config, init_params=True)
+            
         config.register_for_auto_class()
         model.register_for_auto_class("AutoModel")
     elif args.mode == 'llama':
