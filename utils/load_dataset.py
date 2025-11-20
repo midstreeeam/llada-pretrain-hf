@@ -96,10 +96,11 @@ def finefineweb(local_path):
     """加载 FineFineWeb 训练数据集"""
     if local_path is not None and os.path.exists(local_path):
         print(f"从本地路径加载数据集 'finefineweb': {local_path}")
-        dataset = datasets.load_dataset(local_path,num_proc=64)['train']
+        # 本地路径使用 load_from_disk 加载 Arrow 数据集
+        dataset = datasets.load_from_disk(local_path)
     else:
         print("从远程加载数据集 'finefineweb'")
-        dataset = datasets.load_dataset("m-a-p/FineFineWeb-sample",num_proc=64)['train']
+        dataset = datasets.load_dataset("m-a-p/FineFineWeb-sample", num_proc=64)['train']
     
     return dataset
 
