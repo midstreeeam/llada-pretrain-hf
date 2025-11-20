@@ -44,7 +44,7 @@ main_args:
   generation_decode_top_k: 0
   generation_remask_strategy: low_confidence
   generation_prompts:
-    - "The plane fell from the sky"
+    - "Russia launched a British research satellite atop a converted ballistic missile Wednesday, the first step in a project to earn much-needed cash from its aging rocket arsenal."
 
   resume_from_checkpoint: null
 

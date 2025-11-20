@@ -11,6 +11,15 @@ The configuration file can be YAML (preferred) or JSON and supports the followin
   extra_args: list of raw strings appended to the command.
 
 All string values support `{repo_dir}` and `{output_dir}` substitution.
+
+# Make sure both GPUs are visible
+export CUDA_VISIBLE_DEVICES=0,1
+
+# Multi‑GPU launch (2 processes, 1 per GPU)
+torchrun --standalone --nnodes=1 --nproc_per_node=2 \
+  training_launcher.py \
+  --config training_config/llada_100m.yaml \
+  --repo-dir .
 """
 
 from __future__ import annotations
