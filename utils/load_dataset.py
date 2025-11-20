@@ -96,8 +96,25 @@ def finefineweb(local_path):
     """加载 FineFineWeb 训练数据集"""
     if local_path is not None and os.path.exists(local_path):
         print(f"从本地路径加载数据集 'finefineweb': {local_path}")
-        # 本地路径使用 load_from_disk 加载 Arrow 数据集
-        dataset = datasets.load_from_disk(local_path)
+        path = Path(local_path)
+        if path.is_file():
+            # JSONL file written by download_finefineweb_subset.py
+            dataset = datasets.load_dataset(
+                "json",
+                data_files={"train": str(path)},
+                split="train",
+            )
+        else:
+            # 尝试从 Arrow 目录加载
+            try:
+                dataset = datasets.load_from_disk(str(path))
+            except Exception as e:
+                print(f"load_from_disk 失败 ({e})，尝试从 JSON 文件加载")
+                dataset = datasets.load_dataset(
+                    "json",
+                    data_files={"train": str(path / '*.jsonl')},
+                    split="train",
+                )
     else:
         print("从远程加载数据集 'finefineweb'")
         dataset = datasets.load_dataset("m-a-p/FineFineWeb-sample", num_proc=64)['train']

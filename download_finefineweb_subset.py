@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-Download a ~10GB subset of FineFineWeb to a local Arrow dataset and
+Download a ~10GB subset of FineFineWeb to a local JSONL file and
 configure this repo to use it as the local source for `finefineweb`.
 
 Usage (from repo root):
@@ -74,34 +74,39 @@ def main() -> None:
         print(f"[env] HF endpoints not set; defaulting to {mirror}")
 
     # Import datasets *after* setting env so the hub client sees the mirror.
-    from datasets import Dataset, load_dataset
+    from datasets import load_dataset
 
     # Use streaming so we don't need to download all shards up-front.
     stream = load_dataset(args.dataset, split="train", streaming=True)
 
-    records = []
+    jsonl_path = out_dir / "finefineweb_subset.jsonl"
     total_bytes = 0
-    for idx, row in enumerate(stream):
-        # FineFineWeb uses 'text'; fall back to 'content' defensively.
-        text = row.get("text") or row.get("content") or ""
-        if not isinstance(text, str):
-            continue
-        size = len(text.encode("utf-8", errors="ignore"))
-        if total_bytes + size > max_bytes and records:
-            break
-        total_bytes += size
-        records.append({"text": text})
+    num_examples = 0
 
-        if (idx + 1) % 10000 == 0:
-            print(f"[download] Collected {idx+1} examples, ~{total_bytes/2**30:.2f} GiB of text")
+    with jsonl_path.open("w", encoding="utf-8") as writer:
+        for idx, row in enumerate(stream):
+            # FineFineWeb uses 'text'; fall back to 'content' defensively.
+            text = row.get("text") or row.get("content") or ""
+            if not isinstance(text, str):
+                continue
+            size = len(text.encode("utf-8", errors="ignore"))
+            if total_bytes + size > max_bytes and num_examples > 0:
+                break
 
-    if not records:
+            record = {"text": text}
+            writer.write(json.dumps(record, ensure_ascii=False) + "\n")
+
+            total_bytes += size
+            num_examples += 1
+
+            if num_examples % 10000 == 0:
+                print(f"[download] Collected {num_examples} examples, ~{total_bytes/2**30:.2f} GiB of text")
+
+    if num_examples == 0:
         raise SystemExit("No records collected; check network or dataset name.")
 
-    print(f"[build] Final subset: {len(records)} examples, ~{total_bytes/2**30:.2f} GiB of text")
-    ds = Dataset.from_list(records)
-    ds.save_to_disk(str(out_dir))
-    print(f"[build] Saved subset to {out_dir}")
+    print(f"[build] Final subset: {num_examples} examples, ~{total_bytes/2**30:.2f} GiB of text")
+    print(f"[build] Saved JSONL to {jsonl_path}")
 
     # Update diffusion/dataset_config.json so `finefineweb` uses this path.
     cfg_dir = Path("diffusion")
@@ -114,7 +119,7 @@ def main() -> None:
     else:
         cfg = {}
     local_paths = cfg.get("local_paths", {})
-    local_paths["finefineweb"] = str(out_dir)
+    local_paths["finefineweb"] = str(jsonl_path)
     cfg["local_paths"] = local_paths
 
     with cfg_path.open("w", encoding="utf-8") as f:
