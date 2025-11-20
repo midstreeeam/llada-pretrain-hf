@@ -14,8 +14,6 @@ import json
 import os
 from pathlib import Path
 
-from datasets import Dataset, load_dataset
-
 
 def parse_size(arg: str) -> int:
     """Parse sizes like '10G', '10GiB', '10000000000' into bytes."""
@@ -68,10 +66,15 @@ def main() -> None:
     print(f"[download] Max raw text bytes   : {max_bytes}")
 
     # Ensure we use an HF mirror if no endpoint is configured.
-    if "HF_ENDPOINT" not in os.environ and "HF_HUB_ENDPOINT" not in os.environ:
-        os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
-        os.environ["HF_HUB_ENDPOINT"] = os.environ["HF_ENDPOINT"]
-        print(f"[env] HF_ENDPOINT not set; defaulting to {os.environ['HF_ENDPOINT']}")
+    if "HF_ENDPOINT" not in os.environ and "HF_HUB_ENDPOINT" not in os.environ and "HF_HUB_BASE_URL" not in os.environ:
+        mirror = "https://hf-mirror.com"
+        os.environ["HF_ENDPOINT"] = mirror
+        os.environ["HF_HUB_ENDPOINT"] = mirror
+        os.environ["HF_HUB_BASE_URL"] = mirror
+        print(f"[env] HF endpoints not set; defaulting to {mirror}")
+
+    # Import datasets *after* setting env so the hub client sees the mirror.
+    from datasets import Dataset, load_dataset
 
     # Use streaming so we don't need to download all shards up-front.
     stream = load_dataset(args.dataset, split="train", streaming=True)
