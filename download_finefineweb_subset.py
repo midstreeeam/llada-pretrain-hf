@@ -67,6 +67,12 @@ def main() -> None:
     print(f"[download] Target directory     : {out_dir}")
     print(f"[download] Max raw text bytes   : {max_bytes}")
 
+    # Ensure we use an HF mirror if no endpoint is configured.
+    if "HF_ENDPOINT" not in os.environ and "HF_HUB_ENDPOINT" not in os.environ:
+        os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
+        os.environ["HF_HUB_ENDPOINT"] = os.environ["HF_ENDPOINT"]
+        print(f"[env] HF_ENDPOINT not set; defaulting to {os.environ['HF_ENDPOINT']}")
+
     # Use streaming so we don't need to download all shards up-front.
     stream = load_dataset(args.dataset, split="train", streaming=True)
 
@@ -117,4 +123,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
