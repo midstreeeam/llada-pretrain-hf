@@ -62,6 +62,40 @@ def main() -> None:
     # Ensure the target directory itself exists so we can write the JSONL file.
     out_dir.mkdir(parents=True, exist_ok=True)
 
+    jsonl_path = out_dir / "finefineweb_subset.jsonl"
+
+    # Resume logic: if JSONL already exists, treat max_bytes as TOTAL target size
+    existing_bytes = 0
+    existing_examples = 0
+    if jsonl_path.exists():
+        existing_bytes = jsonl_path.stat().st_size
+        # Count existing examples (lines)
+        with jsonl_path.open("r", encoding="utf-8") as f_in:
+            for existing_examples, _ in enumerate(f_in, start=1):
+                pass
+        print(
+            f"[resume] Found existing subset: {existing_examples} examples, "
+            f"~{existing_bytes/2**30:.2f} GiB"
+        )
+        if existing_bytes >= max_bytes:
+            print("[resume] Existing file already meets or exceeds target size; nothing to do.")
+            # Still ensure dataset_config points to this path.
+            cfg_dir = Path("diffusion")
+            cfg_dir.mkdir(parents=True, exist_ok=True)
+            cfg_path = cfg_dir / "dataset_config.json"
+            if cfg_path.exists():
+                with cfg_path.open("r", encoding="utf-8") as f:
+                    cfg = json.load(f)
+            else:
+                cfg = {}
+            local_paths = cfg.get("local_paths", {})
+            local_paths["finefineweb"] = str(jsonl_path)
+            cfg["local_paths"] = local_paths
+            with cfg_path.open("w", encoding="utf-8") as f:
+                json.dump(cfg, f, ensure_ascii=False, indent=2)
+            print(f"[config] Updated {cfg_path} with finefineweb -> {jsonl_path}")
+            return
+
     print(f"[download] Sampling from dataset: {args.dataset}")
     print(f"[download] Target directory     : {out_dir}")
     print(f"[download] Max raw text bytes   : {max_bytes}")
@@ -80,18 +114,34 @@ def main() -> None:
     # Use streaming so we don't need to download all shards up-front.
     stream = load_dataset(args.dataset, split="train", streaming=True)
 
-    jsonl_path = out_dir / "finefineweb_subset.jsonl"
-    total_bytes = 0
-    num_examples = 0
+    # Skip already-written examples in the stream (we still have to iterate them,
+    # but we won't write them again).
+    if existing_examples > 0:
+        print(f"[resume] Skipping first {existing_examples} examples from remote stream...")
+        it = iter(stream)
+        skipped = 0
+        while skipped < existing_examples:
+            try:
+                next(it)
+            except StopIteration:
+                break
+            skipped += 1
+        stream = it
 
-    with jsonl_path.open("w", encoding="utf-8") as writer:
-        for idx, row in enumerate(stream):
+    total_bytes = existing_bytes
+    num_examples = existing_examples
+
+    # Append to existing JSONL if present, otherwise create a new one.
+    mode = "a" if jsonl_path.exists() else "w"
+    with jsonl_path.open(mode, encoding="utf-8") as writer:
+        for idx, row in enumerate(stream, start=existing_examples + 1):
             # FineFineWeb uses 'text'; fall back to 'content' defensively.
             text = row.get("text") or row.get("content") or ""
             if not isinstance(text, str):
                 continue
             size = len(text.encode("utf-8", errors="ignore"))
-            if total_bytes + size > max_bytes and num_examples > 0:
+            # Allow at least one new example even if it slightly exceeds the budget.
+            if total_bytes + size > max_bytes and num_examples > existing_examples:
                 break
 
             record = {"text": text}
@@ -107,7 +157,7 @@ def main() -> None:
         raise SystemExit("No records collected; check network or dataset name.")
 
     print(f"[build] Final subset: {num_examples} examples, ~{total_bytes/2**30:.2f} GiB of text")
-    print(f"[build] Saved JSONL to {jsonl_path}")
+    print(f"[build] Saved/updated JSONL at {jsonl_path}")
 
     # Update diffusion/dataset_config.json so `finefineweb` uses this path.
     cfg_dir = Path("diffusion")
