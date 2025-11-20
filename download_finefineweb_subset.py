@@ -5,8 +5,8 @@ configure this repo to use it as the local source for `finefineweb`.
 
 Usage (from repo root):
   python download_finefineweb_subset.py \
-      --out-dir ./data/finefineweb_10g \
-      --max-bytes 10GiB
+    --out-dir ./data/finefineweb_5p \
+    --percent 5.0
 """
 
 import argparse
@@ -50,6 +50,12 @@ def main() -> None:
         help="Approximate maximum raw text size to keep (e.g. '10GiB', '5G').",
     )
     parser.add_argument(
+        "--percent",
+        type=float,
+        default=None,
+        help="If set (e.g. 3.0), download this percentage of the dataset by row count instead of using --max-bytes.",
+    )
+    parser.add_argument(
         "--dataset",
         type=str,
         default="m-a-p/FineFineWeb-sample",
@@ -57,14 +63,73 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    max_bytes = parse_size(args.max_bytes)
     out_dir = Path(args.out_dir).resolve()
     # Ensure the target directory itself exists so we can write the JSONL file.
     out_dir.mkdir(parents=True, exist_ok=True)
 
     jsonl_path = out_dir / "finefineweb_subset.jsonl"
 
-    # Resume logic: if JSONL already exists, treat max_bytes as TOTAL target size
+    # If percent mode is requested, ignore max_bytes and (re)write exactly that slice.
+    if args.percent is not None:
+        print(f"[mode] Using percent mode: {args.percent}% of {args.dataset}")
+
+        # Ensure we use an HF mirror if no endpoint is configured.
+        if "HF_ENDPOINT" not in os.environ and "HF_HUB_ENDPOINT" not in os.environ and "HF_HUB_BASE_URL" not in os.environ:
+            mirror = "https://hf-mirror.com"
+            os.environ["HF_ENDPOINT"] = mirror
+            os.environ["HF_HUB_ENDPOINT"] = mirror
+            os.environ["HF_HUB_BASE_URL"] = mirror
+            print(f"[env] HF endpoints not set; defaulting to {mirror}")
+
+        from datasets import load_dataset
+
+        split_spec = f"train[:{args.percent}%]"
+        print(f"[download] Loading split: {split_spec}")
+        ds = load_dataset(args.dataset, split=split_spec)
+        ds = ds.shuffle(seed=42)
+
+        num_examples = 0
+        total_bytes = 0
+        with jsonl_path.open("w", encoding="utf-8") as writer:
+            for row in ds:
+                text = row.get("text") or row.get("content") or ""
+                if not isinstance(text, str):
+                    continue
+                size = len(text.encode("utf-8", errors="ignore"))
+                record = {"text": text}
+                writer.write(json.dumps(record, ensure_ascii=False) + "\n")
+                num_examples += 1
+                total_bytes += size
+                if num_examples % 10000 == 0:
+                    print(f"[download] Written {num_examples} examples, ~{total_bytes/2**30:.2f} GiB")
+
+        print(f"[build] Final subset: {num_examples} examples, ~{total_bytes/2**30:.2f} GiB of text")
+        print(f"[build] Saved JSONL to {jsonl_path}")
+
+        # Update diffusion/dataset_config.json so `finefineweb` uses this path.
+        cfg_dir = Path("diffusion")
+        cfg_dir.mkdir(parents=True, exist_ok=True)
+        cfg_path = cfg_dir / "dataset_config.json"
+
+        if cfg_path.exists():
+            with cfg_path.open("r", encoding="utf-8") as f:
+                cfg = json.load(f)
+        else:
+            cfg = {}
+        local_paths = cfg.get("local_paths", {})
+        local_paths["finefineweb"] = str(jsonl_path)
+        cfg["local_paths"] = local_paths
+
+        with cfg_path.open("w", encoding="utf-8") as f:
+            json.dump(cfg, f, ensure_ascii=False, indent=2)
+
+        print(f"[config] Updated {cfg_path} with finefineweb -> {jsonl_path}")
+        print("[done] You can now train with dataset_name=finefineweb without remote download.")
+        return
+
+    max_bytes = parse_size(args.max_bytes)
+
+    # Resume logic (byte-budget mode): if JSONL already exists, treat max_bytes as TOTAL target size
     existing_bytes = 0
     existing_examples = 0
     if jsonl_path.exists():
