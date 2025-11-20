@@ -59,7 +59,8 @@ def main() -> None:
 
     max_bytes = parse_size(args.max_bytes)
     out_dir = Path(args.out_dir).resolve()
-    out_dir.parent.mkdir(parents=True, exist_ok=True)
+    # Ensure the target directory itself exists so we can write the JSONL file.
+    out_dir.mkdir(parents=True, exist_ok=True)
 
     print(f"[download] Sampling from dataset: {args.dataset}")
     print(f"[download] Target directory     : {out_dir}")
