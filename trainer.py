@@ -720,8 +720,10 @@ class MultipleLossTrainer(Trainer):
         
         # 添加额外key的累积tensor
         tr_extra_scalars = {}
+        tr_extra_counts = {}
         for key in self.keys_you_want_to_log:
             tr_extra_scalars[key] = torch.tensor(0.0, device=args.device)
+            tr_extra_counts[key] = torch.tensor(0.0, device=args.device)
         
         model.zero_grad()
         grad_norm: Optional[float] = None
@@ -836,7 +838,8 @@ class MultipleLossTrainer(Trainer):
                     if hasattr(self, '_current_step_extra_outputs'):
                         for key, value in self._current_step_extra_outputs.items():
                             if key in tr_extra_scalars:
-                                tr_extra_scalars[key] += value
+                                tr_extra_scalars[key] = value
+                                tr_extra_counts[key] = value.detach().new_tensor(1.0)
 
                     if (
                         args.logging_nan_inf_filter
@@ -916,6 +919,7 @@ class MultipleLossTrainer(Trainer):
                         self._maybe_log_save_evaluate(
                             tr_loss,
                             tr_extra_scalars,  # 传递额外的scalars
+                            tr_extra_counts,
                             grad_norm,
                             model,
                             trial,
@@ -949,7 +953,16 @@ class MultipleLossTrainer(Trainer):
 
             self.control = self.callback_handler.on_epoch_end(args, self.state, self.control)
             self._maybe_log_save_evaluate(
-                tr_loss, tr_extra_scalars, grad_norm, model, trial, epoch, ignore_keys_for_eval, start_time, learning_rate=learning_rate
+                tr_loss,
+                tr_extra_scalars,
+                tr_extra_counts,
+                grad_norm,
+                model,
+                trial,
+                epoch,
+                ignore_keys_for_eval,
+                start_time,
+                learning_rate=learning_rate,
             )
 
             if DebugOption.TPU_METRICS_DEBUG in self.args.debug:
@@ -1026,7 +1039,17 @@ class MultipleLossTrainer(Trainer):
     
 
     def _maybe_log_save_evaluate(
-        self, tr_loss, tr_extra_scalars, grad_norm, model, trial, epoch, ignore_keys_for_eval, start_time, learning_rate=None
+        self,
+        tr_loss,
+        tr_extra_scalars,
+        tr_extra_counts,
+        grad_norm,
+        model,
+        trial,
+        epoch,
+        ignore_keys_for_eval,
+        start_time,
+        learning_rate=None,
     ):
         if self.control.should_log and self.state.global_step > self._globalstep_last_logged:
             if is_torch_xla_available():
@@ -1047,9 +1070,12 @@ class MultipleLossTrainer(Trainer):
                 if key in tr_extra_scalars:
                     # 计算平均值并添加到logs
                     extra_scalar = self._nested_gather(tr_extra_scalars[key]).mean().item()
-                    logs[key] = round(extra_scalar / (self.state.global_step - self._globalstep_last_logged), 4)
+                    count_scalar = self._nested_gather(tr_extra_counts[key]).mean().item()
+                    if count_scalar > 0:
+                        logs[key] = round(extra_scalar / count_scalar, 4)
                     # 重置累积tensor
                     tr_extra_scalars[key] -= tr_extra_scalars[key]
+                    tr_extra_counts[key] -= tr_extra_counts[key]
             
             if grad_norm is not None:
                 logs["grad_norm"] = grad_norm.item() if isinstance(grad_norm, torch.Tensor) else grad_norm

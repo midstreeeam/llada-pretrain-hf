@@ -161,6 +161,11 @@ class LLaDACollator:
         batch_labels = []
 
         batch_mlm_probs = []  # 添加用于存储每个样本MLM概率的列表
+        # 当外部调度器存在时，本批次共用一个mask概率，便于观察逐步波动
+        shared_mlm_prob = None
+        if self.mlm_prob_provider is not None:
+            shared_mlm_prob = float(self.mlm_prob_provider())
+            shared_mlm_prob = (1 - 1e-3) * shared_mlm_prob + 1e-3
         
         for example in examples:
             # 获取input_ids：优先使用现有的input_ids，否则从文本转换
@@ -192,7 +197,7 @@ class LLaDACollator:
 
 
 
-            current_mlm_prob = self._get_mlm_probability()  # 为每个样本获取MLM概率
+            current_mlm_prob = shared_mlm_prob if shared_mlm_prob is not None else self._get_mlm_probability()  # 为每个样本获取MLM概率
             batch_mlm_probs.append(current_mlm_prob)  # 添加到列表中
             
             # 创建MLM mask和labels
@@ -222,11 +227,7 @@ class LLaDACollator:
         }
     
     def _get_mlm_probability(self, eps: float = 1e-3) -> float:
-        # 如果提供了调度器，则优先使用
-        if self.mlm_prob_provider is not None:
-            return float(self.mlm_prob_provider())
-
-        t = random.uniform(0, 1)
+        t = torch.rand(1).item()
         # 这是一个简单的线性噪声调度
         p_mask = (1 - eps) * t + eps
         return p_mask
