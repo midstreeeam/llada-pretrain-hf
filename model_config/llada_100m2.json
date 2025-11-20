@@ -7,7 +7,7 @@
 
   "_comment_core_dims": "100M parameter model optimized for TinyStories",
   "d_model": 768,
-  "n_layers": 16,
+  "n_layers": 18,
   "n_heads": 12,
   "n_kv_heads": 12,
   "mlp_hidden_size": 2048,
