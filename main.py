@@ -25,6 +25,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from collator import NTPCollator, LLaDACollator
+from mlm_schedule import LazyScheduledMLMProbProvider, LazyMLMProbSchedulerCallback
 from llada.modeling_llada import LLaDAModelLM
 from llada.configuration_llada import LLaDAConfig
 from trainer import MultipleLossTrainer
@@ -330,6 +331,15 @@ def main():
 
     shared_step = mp.Value('i', 0)
 
+    # 创建MLM概率调度器（根据训练step调节mask比例）
+    mlm_prob_provider = LazyScheduledMLMProbProvider(
+        shared_step=shared_step,
+        start_prob=args.mlm_start_prob,
+        end_prob=args.mlm_end_prob,
+        schedule_type=args.mlm_schedule_type,
+    )
+    lazy_prob_scheduler_callback = LazyMLMProbSchedulerCallback(mlm_prob_provider, shared_step)
+
 
     if args.mode == 'llada':
         config = LLaDAConfig.from_pretrained(args.config_path)
@@ -347,7 +357,11 @@ def main():
     if args.mode == 'llama':
         collator = NTPCollator(tokenizer, max_length=args.max_length)
     elif args.mode == 'llada':
-        collator = LLaDACollator(tokenizer,max_length=args.max_length)
+        collator = LLaDACollator(
+            tokenizer,
+            max_length=args.max_length,
+            mlm_prob_provider=mlm_prob_provider,
+        )
         
 
     training_args = TrainingArguments(
@@ -379,7 +393,7 @@ def main():
         ddp_find_unused_parameters=False,
         # eval_on_start = True,
     )
-    callbacks = [MetricsLoggerCallback()]
+    callbacks = [MetricsLoggerCallback(), lazy_prob_scheduler_callback]
     if args.generation_interval > 0:
         if tokenizer.mask_token_id is None:
             logging.warning("Tokenizer 缺少 mask_token，无法执行文本生成预览，将跳过此功能。")

@@ -123,6 +123,7 @@ class LLaDACollator:
         tokenizer: PreTrainedTokenizer,
         max_length: int = 512,
         text_key: str = 'text',
+        mlm_prob_provider: Callable[[], float] | None = None,
     ):
         
         self.tokenizer = tokenizer
@@ -139,6 +140,9 @@ class LLaDACollator:
         
         # 可用于随机替换的token范围
         self.vocab_size = tokenizer.vocab_size
+
+        # 可选的外部MLM概率调度器
+        self.mlm_prob_provider = mlm_prob_provider
         
         
     
@@ -218,6 +222,10 @@ class LLaDACollator:
         }
     
     def _get_mlm_probability(self, eps: float = 1e-3) -> float:
+        # 如果提供了调度器，则优先使用
+        if self.mlm_prob_provider is not None:
+            return float(self.mlm_prob_provider())
+
         t = random.uniform(0, 1)
         # 这是一个简单的线性噪声调度
         p_mask = (1 - eps) * t + eps
