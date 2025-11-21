@@ -71,7 +71,7 @@ print("Model test success")
 dataset = LLaDADatasetV2([str(Path(__file__).parent / "data_smollm")])
 dataloader = DataLoader(
     dataset,
-    batch_size=2,
+    batch_size=1,
     shuffle=True,
     num_workers=2, # Reduced for local testing
     pin_memory=True,
