@@ -1,12 +1,12 @@
 #!/usr/bin/env python
 """
-Download a ~10GB subset of FineFineWeb to a local JSONL file and
-configure this repo to use it as the local source for `finefineweb`.
+Download a subset of the SmolLM corpus (specifically fineweb-edu-dedup) to a local JSONL file
+and configure this repo to use it as the local source.
 
 Usage (from repo root):
-  python download.py \
-    --out-dir ./data/finefineweb_50g \
-    --max-bytes 50GiB
+  python download_smollm.py \
+    --out-dir ./data/smollm_20g \
+    --max-bytes 20GiB
 """
 
 import argparse
@@ -40,7 +40,7 @@ def main() -> None:
     parser.add_argument(
         "--out-dir",
         type=str,
-        default="data/finefineweb_10g",
+        default="data/smollm_10g",
         help="Directory to save the subset dataset (used with datasets.load_from_disk).",
     )
     parser.add_argument(
@@ -58,8 +58,14 @@ def main() -> None:
     parser.add_argument(
         "--dataset",
         type=str,
-        default="m-a-p/FineFineWeb-sample",
+        default="HuggingFaceTB/smollm-corpus",
         help="Hugging Face dataset name to sample from.",
+    )
+    parser.add_argument(
+        "--config",
+        type=str,
+        default="fineweb-edu-dedup",
+        help="Dataset configuration/subset name.",
     )
     args = parser.parse_args()
 
@@ -67,11 +73,11 @@ def main() -> None:
     # Ensure the target directory itself exists so we can write the JSONL file.
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    jsonl_path = out_dir / "finefineweb_subset.jsonl"
+    jsonl_path = out_dir / "smollm_subset.jsonl"
 
     # If percent mode is requested, ignore max_bytes and (re)write exactly that slice.
     if args.percent is not None:
-        print(f"[mode] Using percent mode: {args.percent}% of {args.dataset}")
+        print(f"[mode] Using percent mode: {args.percent}% of {args.dataset} ({args.config})")
 
         # Ensure we use an HF mirror if no endpoint is configured.
         if "HF_ENDPOINT" not in os.environ and "HF_HUB_ENDPOINT" not in os.environ and "HF_HUB_BASE_URL" not in os.environ:
@@ -85,7 +91,8 @@ def main() -> None:
 
         split_spec = f"train[:{args.percent}%]"
         print(f"[download] Loading split: {split_spec}")
-        ds = load_dataset(args.dataset, split=split_spec)
+        # Pass the config name (args.config) to load_dataset
+        ds = load_dataset(args.dataset, args.config, split=split_spec)
         ds = ds.shuffle(seed=42)
 
         num_examples = 0
@@ -106,7 +113,7 @@ def main() -> None:
         print(f"[build] Final subset: {num_examples} examples, ~{total_bytes/2**30:.2f} GiB of text")
         print(f"[build] Saved JSONL to {jsonl_path}")
 
-        # Update diffusion/dataset_config.json so `finefineweb` uses this path.
+        # Update diffusion/dataset_config.json so `smollm` uses this path.
         cfg_dir = Path("diffusion")
         cfg_dir.mkdir(parents=True, exist_ok=True)
         cfg_path = cfg_dir / "dataset_config.json"
@@ -117,14 +124,14 @@ def main() -> None:
         else:
             cfg = {}
         local_paths = cfg.get("local_paths", {})
-        local_paths["finefineweb"] = str(jsonl_path)
+        local_paths["smollm"] = str(jsonl_path)
         cfg["local_paths"] = local_paths
 
         with cfg_path.open("w", encoding="utf-8") as f:
             json.dump(cfg, f, ensure_ascii=False, indent=2)
 
-        print(f"[config] Updated {cfg_path} with finefineweb -> {jsonl_path}")
-        print("[done] You can now train with dataset_name=finefineweb without remote download.")
+        print(f"[config] Updated {cfg_path} with smollm -> {jsonl_path}")
+        print("[done] You can now train with dataset_name=smollm without remote download.")
         return
 
     max_bytes = parse_size(args.max_bytes)
@@ -154,14 +161,14 @@ def main() -> None:
             else:
                 cfg = {}
             local_paths = cfg.get("local_paths", {})
-            local_paths["finefineweb"] = str(jsonl_path)
+            local_paths["smollm"] = str(jsonl_path)
             cfg["local_paths"] = local_paths
             with cfg_path.open("w", encoding="utf-8") as f:
                 json.dump(cfg, f, ensure_ascii=False, indent=2)
-            print(f"[config] Updated {cfg_path} with finefineweb -> {jsonl_path}")
+            print(f"[config] Updated {cfg_path} with smollm -> {jsonl_path}")
             return
 
-    print(f"[download] Sampling from dataset: {args.dataset}")
+    print(f"[download] Sampling from dataset: {args.dataset} ({args.config})")
     print(f"[download] Target directory     : {out_dir}")
     print(f"[download] Max raw text bytes   : {max_bytes}")
 
@@ -177,7 +184,8 @@ def main() -> None:
     from datasets import load_dataset
 
     # Use streaming so we don't need to download all shards up-front.
-    stream = load_dataset(args.dataset, split="train", streaming=True)
+    # Pass args.config here as well
+    stream = load_dataset(args.dataset, args.config, split="train", streaming=True)
 
     # Skip already-written examples in the stream (we still have to iterate them,
     # but we won't write them again).
@@ -200,7 +208,7 @@ def main() -> None:
     mode = "a" if jsonl_path.exists() else "w"
     with jsonl_path.open(mode, encoding="utf-8") as writer:
         for idx, row in enumerate(stream, start=existing_examples + 1):
-            # FineFineWeb uses 'text'; fall back to 'content' defensively.
+            # Fall back to 'content' if 'text' is missing
             text = row.get("text") or row.get("content") or ""
             if not isinstance(text, str):
                 continue
@@ -224,7 +232,7 @@ def main() -> None:
     print(f"[build] Final subset: {num_examples} examples, ~{total_bytes/2**30:.2f} GiB of text")
     print(f"[build] Saved/updated JSONL at {jsonl_path}")
 
-    # Update diffusion/dataset_config.json so `finefineweb` uses this path.
+    # Update diffusion/dataset_config.json so `smollm` uses this path.
     cfg_dir = Path("diffusion")
     cfg_dir.mkdir(parents=True, exist_ok=True)
     cfg_path = cfg_dir / "dataset_config.json"
@@ -235,14 +243,14 @@ def main() -> None:
     else:
         cfg = {}
     local_paths = cfg.get("local_paths", {})
-    local_paths["finefineweb"] = str(jsonl_path)
+    local_paths["smollm"] = str(jsonl_path)
     cfg["local_paths"] = local_paths
 
     with cfg_path.open("w", encoding="utf-8") as f:
         json.dump(cfg, f, ensure_ascii=False, indent=2)
 
-    print(f"[config] Updated {cfg_path} with finefineweb -> {out_dir}")
-    print("[done] You can now train with dataset_name=finefineweb without remote download.")
+    print(f"[config] Updated {cfg_path} with smollm -> {out_dir}")
+    print("[done] You can now train with dataset_name=smollm without remote download.")
 
 
 if __name__ == "__main__":
