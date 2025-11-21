@@ -13,7 +13,7 @@ from torch.nn.utils.rnn import pad_sequence
 device = ("cuda:0" if torch.cuda.is_available() else "cpu")
 model_100M = ModelConfig(d_model=768, n_heads=12, n_layers=14, 
             n_kv_heads=12, mlp_ratio=4, mlp_hidden_size=3072,
-            max_sequence_length=4096, vocab_size=126464,
+            max_sequence_length=1024, vocab_size=126464,
             mask_token_id=126336, eos_token_id=126081,
             pad_token_id=126081, layer_norm_type=LayerNormType.rms,
             rms_norm_eps=1e-5, attention_dropout=0.0, residual_dropout=0.0,
@@ -25,7 +25,7 @@ model_100M = ModelConfig(d_model=768, n_heads=12, n_layers=14,
 
 hf_configs = LLaDAConfig(d_model=768, n_heads=12, n_layers=14, 
             n_kv_heads=12, mlp_ratio=4, mlp_hidden_size=3072,
-            max_sequence_length=4096, vocab_size=126464,
+            max_sequence_length=1024, vocab_size=126464,
             mask_token_id=126336, eos_token_id=126081,
             pad_token_id=126081, layer_norm_type=LayerNormType.rms,
             rms_norm_eps=1e-5, attention_dropout=0.0, residual_dropout=0.0,
