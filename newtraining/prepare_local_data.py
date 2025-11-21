@@ -30,26 +30,75 @@ class PrepareLocalData:
         print(f"Loading tokenizer from {self.tokenizer_name}")
         self.tokenizer = AutoTokenizer.from_pretrained(self.tokenizer_name)
 
-    def process_chunk(self, chunk_tokens, device, eps=1e-3):
-        # chunk_tokens is already a tensor or list of ints
-        if not torch.is_tensor(chunk_tokens):
-            chunk_tensor = torch.tensor(chunk_tokens, dtype=torch.int32, device=device)
-        else:
-            chunk_tensor = chunk_tokens.to(device=device, dtype=torch.int32)
+    def process_batch(self, batch_tokens, device, eps=1e-3):
+        # batch_tokens: List[List[int]]
+        # We need to pad them to the same length to create a tensor, 
+        # but our logic ensures they are mostly max_seq_length. 
+        # However, the last chunk might be shorter, or random length strategy might be used.
+        # For efficiency, we should only batch chunks of the same length or pad.
+        # Given the random length strategy, we might have varying lengths.
+        # To vectorize efficiently, we can pad to the max length in the batch.
+        
+        max_len = max(len(t) for t in batch_tokens)
+        batch_size = len(batch_tokens)
+        
+        # Create tensor [B, L]
+        # Initialize with pad_token_id if we had one, but here we can just use 0 or mask token
+        # Since we are masking anyway, let's just use 0 for padding and ignore it in loss if needed.
+        # But wait, the model expects specific shapes. 
+        # The training script handles variable lengths via padding in collator.
+        # Here we are saving processed chunks.
+        
+        # Construct tensor
+        input_ids = torch.full((batch_size, max_len), 0, dtype=torch.int32, device=device)
+        for i, tokens in enumerate(batch_tokens):
+            input_ids[i, :len(tokens)] = torch.tensor(tokens, dtype=torch.int32, device=device)
             
-        t = random.random()
+        # Generate t [B]
+        t = torch.rand(batch_size, device=device)
+        
+        # Generate mask probability p_mask [B]
         p_mask = (1.0 - eps) * t + eps
-        mask = torch.rand(chunk_tensor.size(0), device=device) < p_mask
-        noisy = chunk_tensor.clone()
-        noisy[mask] = self.id_mask_token
-        return {
-            "t": t,
-            "input_ids": chunk_tensor.cpu(), # Move back to CPU to save RAM/VRAM when accumulating
-            "noisy_input_ids": noisy.cpu(),
-            "mask": mask.cpu()
-        }
+        
+        # Generate mask [B, L]
+        # p_mask is [B], we need to broadcast to [B, L]
+        rand_vals = torch.rand(input_ids.shape, device=device)
+        mask = rand_vals < p_mask.unsqueeze(1)
+        
+        # Handle padding: ensure padding positions are not masked (optional, but good practice)
+        # We need a sequence mask to know real lengths
+        seq_lens = torch.tensor([len(t) for t in batch_tokens], device=device)
+        # Create range [0, max_len)
+        range_tensor = torch.arange(max_len, device=device).unsqueeze(0) # [1, L]
+        # valid_mask [B, L]
+        valid_mask = range_tensor < seq_lens.unsqueeze(1)
+        
+        # Only mask valid positions
+        mask = mask & valid_mask
+        
+        # Create noisy input
+        noisy_input_ids = input_ids.clone()
+        noisy_input_ids[mask] = self.id_mask_token
+        
+        # Move back to CPU and convert to list of dicts
+        input_ids_cpu = input_ids.cpu()
+        noisy_input_ids_cpu = noisy_input_ids.cpu()
+        mask_cpu = mask.cpu()
+        t_cpu = t.cpu()
+        
+        results = []
+        for i in range(batch_size):
+            l = len(batch_tokens[i])
+            results.append({
+                "t": t_cpu[i].item(),
+                "input_ids": input_ids_cpu[i, :l],
+                "noisy_input_ids": noisy_input_ids_cpu[i, :l],
+                "mask": mask_cpu[i, :l]
+            })
+            
+        return results
 
-    def prepare(self, batch_size: int = 1000):
+    def prepare(self, batch_size: int = 1000, gpu_batch_size: int = 1024):
         print(f"==== Loading Data from {self.input_file} ====")
         import json
         
@@ -60,6 +109,8 @@ class PrepareLocalData:
         current_chunk = []
         chunk_count = 0
         file_count = 0
+        
+        pending_chunks = [] # List of List[int]
         
         # Count lines for tqdm
         total_lines = 0
@@ -98,20 +149,27 @@ class PrepareLocalData:
                                 L = self.max_seq_length
                             
                             chunk_tokens = current_chunk[:L]
-                            processed.append(self.process_chunk(chunk_tokens, device))
+                            pending_chunks.append(chunk_tokens)
                             current_chunk = current_chunk[L:]
-                            chunk_count += 1
+                            
+                            if len(pending_chunks) >= gpu_batch_size:
+                                batch_results = self.process_batch(pending_chunks, device)
+                                processed.extend(batch_results)
+                                chunk_count += len(batch_results)
+                                pending_chunks = []
+                                
+                                # Save if needed
+                                while len(processed) >= self.chunks_per_file:
+                                    to_save = processed[:self.chunks_per_file]
+                                    processed = processed[self.chunks_per_file:]
+                                    self.save_batch(to_save, file_count)
+                                    file_count += 1
 
-                            if chunk_count % self.chunks_per_file == 0:
-                                self.save_batch(processed, file_count)
-                                processed = []
-                                file_count += 1
-                    
                     batch_texts = []
             
             pbar.close()
 
-        # Process remaining batch
+        # Process remaining batch texts
         if batch_texts:
             encodings = self.tokenizer(batch_texts, add_special_tokens=True)
             for tokens in encodings["input_ids"]:
@@ -123,23 +181,35 @@ class PrepareLocalData:
                         L = self.max_seq_length
                     
                     chunk_tokens = current_chunk[:L]
-                    processed.append(self.process_chunk(chunk_tokens, device))
+                    pending_chunks.append(chunk_tokens)
                     current_chunk = current_chunk[L:]
-                    chunk_count += 1
 
-                    if chunk_count % self.chunks_per_file == 0:
-                        self.save_batch(processed, file_count)
-                        processed = []
-                        file_count += 1
-        
         # Process remaining tokens in current_chunk
         if current_chunk:
-            processed.append(self.process_chunk(current_chunk, device))
-            chunk_count += 1
+            pending_chunks.append(current_chunk)
+            
+        # Process remaining pending chunks
+        if pending_chunks:
+            # Process in chunks of gpu_batch_size to avoid OOM if pending is huge
+            for i in range(0, len(pending_chunks), gpu_batch_size):
+                batch = pending_chunks[i:i+gpu_batch_size]
+                batch_results = self.process_batch(batch, device)
+                processed.extend(batch_results)
+                chunk_count += len(batch_results)
         
-        # Save remaining
-        if processed:
-            self.save_batch(processed, file_count)
+        # Save remaining processed
+        while len(processed) > 0:
+            # If we have more than chunks_per_file, save chunks_per_file
+            # If less, save all
+            if len(processed) >= self.chunks_per_file:
+                to_save = processed[:self.chunks_per_file]
+                processed = processed[self.chunks_per_file:]
+            else:
+                to_save = processed
+                processed = []
+            
+            self.save_batch(to_save, file_count)
+            file_count += 1
             
         print(f"==== Finished. Total chunks: {chunk_count} ====")
 
