@@ -68,7 +68,7 @@ tokenizer = AutoTokenizer.from_pretrained("GSAI-ML/LLaDA-8B-Instruct")
 hf_model = LLaDAModelLM(config=hf_configs, model=model)
 print("Model test success")
 
-dataset = LLaDADatasetV2(["newtraining/data_tinystories"])
+dataset = LLaDADatasetV2(["newtraining/data_smollm"])
 dataloader = DataLoader(
     dataset,
     batch_size=2,
