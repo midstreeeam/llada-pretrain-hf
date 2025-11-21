@@ -46,8 +46,7 @@ class PrepareLocalData:
 
     def prepare(self):
         print(f"==== Loading Data from {self.input_file} ====")
-        # Load local jsonl file
-        dataset = load_dataset("json", data_files=self.input_file, split="train")
+        import json
         
         print("==== Tokenizing and Processing ====")
         device = torch.device("cpu")
@@ -57,49 +56,51 @@ class PrepareLocalData:
         chunk_count = 0
         file_count = 0
         
-        # Process in a streaming-like fashion to avoid OOM on large datasets
-        # We iterate and tokenize on the fly or in batches if we used map, 
-        # but for simplicity and memory safety with large files, simple iteration is fine.
-        # To speed up, we can use map with batched=True for tokenization.
-        
-        def tokenize_function(examples):
-            return self.tokenizer(examples["text"])
-
-        # Tokenize efficiently
-        tokenized_dataset = dataset.map(
-            tokenize_function,
-            batched=True,
-            batch_size=1000,
-            remove_columns=dataset.column_names,
-            desc="Tokenizing"
-        )
-
-        for example in tqdm(tokenized_dataset, desc="Creating Chunks"):
-            tokens = example["input_ids"]
-            current_chunk.extend(tokens)
-
-            while len(current_chunk) >= self.max_seq_length:
-                # Random length strategy from original script
-                if random.random() < 0.01:
-                    L = random.randint(1, self.max_seq_length)
-                else:
-                    L = self.max_seq_length
+        # Count lines for tqdm
+        total_lines = 0
+        with open(self.input_file, 'r', encoding='utf-8') as f:
+            for _ in f:
+                total_lines += 1
                 
-                chunk_tokens = current_chunk[:L]
-                processed.append(self.process_chunk(chunk_tokens, device))
-                current_chunk = current_chunk[L:]
-                chunk_count += 1
+        print(f"Total lines: {total_lines}")
 
-                if chunk_count % self.chunks_per_file == 0:
-                    self.save_batch(processed, file_count)
-                    processed = []
-                    file_count += 1
+        with open(self.input_file, 'r', encoding='utf-8') as f:
+            for line in tqdm(f, total=total_lines, desc="Processing"):
+                try:
+                    record = json.loads(line)
+                    text = record.get("text", "")
+                    if not text:
+                        continue
+                        
+                    # Tokenize
+                    tokens = self.tokenizer(text)["input_ids"]
+                    current_chunk.extend(tokens)
+
+                    while len(current_chunk) >= self.max_seq_length:
+                        # Random length strategy
+                        if random.random() < 0.01:
+                            L = random.randint(1, self.max_seq_length)
+                        else:
+                            L = self.max_seq_length
+                        
+                        chunk_tokens = current_chunk[:L]
+                        processed.append(self.process_chunk(chunk_tokens, device))
+                        current_chunk = current_chunk[L:]
+                        chunk_count += 1
+
+                        if chunk_count % self.chunks_per_file == 0:
+                            self.save_batch(processed, file_count)
+                            processed = []
+                            file_count += 1
+                            
+                except json.JSONDecodeError:
+                    continue
         
         # Process remaining tokens in current_chunk
         if current_chunk:
             processed.append(self.process_chunk(current_chunk, device))
             chunk_count += 1
-
+        
         # Save remaining
         if processed:
             self.save_batch(processed, file_count)
