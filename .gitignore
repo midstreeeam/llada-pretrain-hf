@@ -12,3 +12,8 @@ modernbert*.json
 output/
 
 newtraining/
+
+.ipynb_checkpoints/
+data/
+diffusion/
+hf_cache/
