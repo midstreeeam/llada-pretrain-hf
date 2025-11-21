@@ -10,21 +10,21 @@ main_args:
   model_name_or_path: answerdotai/ModernBERT-base
   dataset_name: finefineweb
   validation_dataset_name: none
-  output_dir: "{repo_dir}/output/llada_135m_dl"
-  config_path: "{repo_dir}/model_config/llada_135m.json"
+  output_dir: "{repo_dir}/output/llada_100m_dl"
+  config_path: "{repo_dir}/model_config/llada_100m2.json"
   mode: llada
 
   num_train_epochs: 1
-  learning_rate: 0.0006
+  learning_rate: 0.0005
 
   per_device_train_batch_size: 32
   per_device_eval_batch_size: 32
   gradient_accumulation_steps: 1
 
   max_length: 512
-  mlm_start_prob: 0.85
+  mlm_start_prob: 0.3
   mlm_end_prob: 0.15
-  mlm_schedule_type: random
+  mlm_schedule_type: cosine
   warmup_ratio: 0.05
 
   logging_steps: 100
@@ -38,13 +38,13 @@ main_args:
 
   generation_interval: 2000
   generation_max_new_tokens: 128
-  generation_num_diffusion_steps: 128
+  generation_num_diffusion_steps: 64
   generation_temperature: 1.0
-  generation_block_size: 128
+  generation_block_size: 64
   generation_decode_top_k: 0
   generation_remask_strategy: low_confidence
   generation_prompts:
-    - "Sir Isaac Newton was an English polymath active as a mathematician, physicist, astronomer, alchemist, theologian, author, and inventor. He was "
+    - "The plane fell from the sky"
 
   resume_from_checkpoint: null
 
