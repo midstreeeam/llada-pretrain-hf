@@ -10,3 +10,5 @@ modernbert*.json
 .claude
 
 output/
+
+newtraining/
