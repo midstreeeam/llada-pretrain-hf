@@ -10,7 +10,7 @@ main_args:
   model_name_or_path: answerdotai/ModernBERT-base
   dataset_name: smollm
   validation_dataset_name: none
-  output_dir: "{repo_dir}/output/llada_135m_dl"
+  output_dir: "{repo_dir}/output/llada_135m_phase2"
   config_path: "{repo_dir}/model_config/llada_135m.json"
   mode: llada
 
