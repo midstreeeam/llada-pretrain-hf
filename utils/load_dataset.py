@@ -215,14 +215,17 @@ def smollm(local_path):
         print(f"从本地路径加载数据集 'smollm': {local_path}")
         try:
             if os.path.isfile(local_path):
-                dataset = datasets.load_dataset("json", data_files=local_path, split="train", num_proc=64)
+                print(f"Attempting to load JSONL with num_proc=1 for debugging...")
+                dataset = datasets.load_dataset("json", data_files=local_path, split="train", num_proc=1)
             else:
                 dataset = datasets.load_from_disk(local_path)
         except Exception as e:
-            print(f"本地加载失败: {e}, 尝试远程加载")
+            print(f"本地加载失败: {e}")
+            raise ValueError(f"Failed to load local dataset and remote loading is disabled: {e}")
             # dataset = datasets.load_dataset("HuggingFaceTB/smollm-corpus", "cosmopedia-v2", num_proc=64)['train']
     else:
         print("从远程加载数据集 'smollm': HuggingFaceTB/smollm-corpus")
-        dataset = datasets.load_dataset("HuggingFaceTB/smollm-corpus", "cosmopedia-v2", num_proc=64)['train']
+        # dataset = datasets.load_dataset("HuggingFaceTB/smollm-corpus", "cosmopedia-v2", num_proc=64)['train']
+        raise ValueError("Remote loading is disabled for smollm. Please ensure local path is correct.")
 
     return dataset
