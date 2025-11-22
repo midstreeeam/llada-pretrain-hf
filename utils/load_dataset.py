@@ -207,3 +207,19 @@ def tinystories(local_path):
 
     # TinyStories already has 'text' field, no need to rename
     return dataset
+
+@register_dataset()
+def smollm(local_path):
+    """加载 Smollm 数据集"""
+    if local_path is not None and os.path.exists(local_path):
+        print(f"从本地路径加载数据集 'smollm': {local_path}")
+        try:
+            dataset = datasets.load_from_disk(local_path)
+        except Exception as e:
+            print(f"本地加载失败: {e}, 尝试远程加载")
+            dataset = datasets.load_dataset("HuggingFaceTB/smollm-corpus", "cosmopedia-v2", num_proc=64)['train']
+    else:
+        print("从远程加载数据集 'smollm': HuggingFaceTB/smollm-corpus")
+        dataset = datasets.load_dataset("HuggingFaceTB/smollm-corpus", "cosmopedia-v2", num_proc=64)['train']
+
+    return dataset
