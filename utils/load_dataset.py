@@ -214,7 +214,10 @@ def smollm(local_path):
     if local_path is not None and os.path.exists(local_path):
         print(f"从本地路径加载数据集 'smollm': {local_path}")
         try:
-            dataset = datasets.load_from_disk(local_path)
+            if os.path.isfile(local_path):
+                dataset = datasets.load_dataset("json", data_files=local_path, split="train", num_proc=64)
+            else:
+                dataset = datasets.load_from_disk(local_path)
         except Exception as e:
             print(f"本地加载失败: {e}, 尝试远程加载")
             dataset = datasets.load_dataset("HuggingFaceTB/smollm-corpus", "cosmopedia-v2", num_proc=64)['train']
