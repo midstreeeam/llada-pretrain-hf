@@ -220,7 +220,7 @@ def smollm(local_path):
                 dataset = datasets.load_from_disk(local_path)
         except Exception as e:
             print(f"本地加载失败: {e}, 尝试远程加载")
-            dataset = datasets.load_dataset("HuggingFaceTB/smollm-corpus", "cosmopedia-v2", num_proc=64)['train']
+            # dataset = datasets.load_dataset("HuggingFaceTB/smollm-corpus", "cosmopedia-v2", num_proc=64)['train']
     else:
         print("从远程加载数据集 'smollm': HuggingFaceTB/smollm-corpus")
         dataset = datasets.load_dataset("HuggingFaceTB/smollm-corpus", "cosmopedia-v2", num_proc=64)['train']
