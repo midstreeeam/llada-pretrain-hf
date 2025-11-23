@@ -223,7 +223,6 @@ class LLaDACollator:
             'attention_mask': torch.tensor(batch_attention_mask, dtype=torch.long),
             'labels': torch.tensor(batch_labels, dtype=torch.long),
             'current_mlm_prob': torch.tensor(batch_mlm_probs, dtype=torch.float),  # 使用列表转换
-            'return_dict': True,
         }
     
     def _get_mlm_probability(self, eps: float = 1e-3) -> float:
