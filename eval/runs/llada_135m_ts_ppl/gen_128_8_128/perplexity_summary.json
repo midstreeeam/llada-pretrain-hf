@@ -1,9 +1,9 @@
 {
-  "student_checkpoint": "output/llada_135m_ts/checkpoint-555000",
+  "student_checkpoint": "output/llada_135m_ts/checkpoint-662420",
   "student_tokenizer": null,
   "judge_model": "Qwen/Qwen3-1.7B",
   "generation_tag": "gen_128_8_128",
-  "timestamp": "2025-11-22T18:46:12.258353",
+  "timestamp": "2025-11-23T04:28:21.174440",
   "artifacts": {
     "generation_jsonl": "eval/runs/llada_135m_ts_ppl/gen_128_8_128/artifacts/model_generations.jsonl",
     "model_ppl_summary": "eval/runs/llada_135m_ts_ppl/gen_128_8_128/artifacts/model_generations_perplexity.json",
@@ -20,10 +20,10 @@
   },
   "model_perplexity": {
     "total_sequences": 256,
-    "total_tokens": 30251,
-    "total_neg_log_likelihood": 121102.0,
-    "mean_per_token_nll": 4.003239562328518,
-    "perplexity": 54.77531095017635,
+    "total_tokens": 29782,
+    "total_neg_log_likelihood": 119536.0,
+    "mean_per_token_nll": 4.013699550063797,
+    "perplexity": 55.35126702632316,
     "metadata": {
       "judge_model": "Qwen/Qwen3-1.7B",
       "dtype": "torch.bfloat16",

@@ -14,7 +14,7 @@ with a reference LM (judge) to compute cross-model perplexity.
 
 ```bash
 PYTHONPATH=$(pwd) python eval/pipeline.py \
-  --student-checkpoint output/llada_135m_ts/checkpoint-555000 \
+  --student-checkpoint output/llada_135m_ts/checkpoint-662420 \
   --judge-model Qwen/Qwen3-1.7B \
   --output-dir eval/runs/llada_135m_ts_ppl \
   --generation-num-prompts 256 \
