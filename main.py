@@ -223,7 +223,6 @@ def main():
     parser.add_argument("--save_total_limit", type=int, default=1)
     parser.add_argument("--logging_steps", type=int, default=1)
     parser.add_argument("--save_steps", type=int, default=500)
-    parser.add_argument("--save_steps", type=int, default=500)
 
     parser.add_argument("--evaluation_strategy", type=str, default="steps",
                         help="评估策略 ('no', 'steps', 'epoch')。")
