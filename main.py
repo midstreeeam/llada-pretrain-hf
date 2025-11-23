@@ -223,6 +223,7 @@ def main():
     parser.add_argument("--save_total_limit", type=int, default=1)
     parser.add_argument("--logging_steps", type=int, default=1)
     parser.add_argument("--save_steps", type=int, default=500)
+    parser.add_argument("--max_steps", type=int, default=-1, help="If > 0: set total number of training steps to perform. Overrides num_train_epochs.")
 
     parser.add_argument("--evaluation_strategy", type=str, default="steps",
                         help="评估策略 ('no', 'steps', 'epoch')。")
@@ -375,6 +376,29 @@ def main():
             mlm_prob_provider=mlm_prob_provider,
         )
         
+    # Calculate max_steps if not provided and using streaming dataset from local file
+    if args.max_steps <= 0:
+        import glob
+        from utils.load_dataset import get_local_path
+        local_path = get_local_path(args.dataset_name)
+        if local_path and os.path.exists(local_path) and os.path.isfile(local_path):
+            if is_main_process():
+                logging.info(f"Calculating max_steps from local file: {local_path}")
+            try:
+                # Count lines efficiently
+                with open(local_path, 'rb') as f:
+                    num_examples = sum(1 for _ in f)
+                
+                total_batch_size = args.per_device_train_batch_size * args.gradient_accumulation_steps
+                # Adjust for number of GPUs (assuming distributed training)
+                if torch.distributed.is_initialized():
+                    total_batch_size *= torch.distributed.get_world_size()
+                
+                args.max_steps = (num_examples * args.num_train_epochs) // total_batch_size
+                if is_main_process():
+                    logging.info(f"Calculated max_steps: {args.max_steps} (examples={num_examples}, epochs={args.num_train_epochs}, total_batch={total_batch_size})")
+            except Exception as e:
+                logging.warning(f"Failed to calculate max_steps from file: {e}")
 
     training_args = TrainingArguments(
         output_dir=args.output_dir,
@@ -403,6 +427,7 @@ def main():
         disable_tqdm=args.disable_tqdm,
         remove_unused_columns=False,
         ddp_find_unused_parameters=False,
+        max_steps=args.max_steps,
         # eval_on_start = True,
     )
     callbacks = [MetricsLoggerCallback(), lazy_prob_scheduler_callback]
