@@ -215,8 +215,8 @@ def smollm(local_path):
         print(f"从本地路径加载数据集 'smollm': {local_path}")
         try:
             if os.path.isfile(local_path):
-                print(f"Attempting to load JSONL with num_proc=1 for debugging...")
-                dataset = datasets.load_dataset("json", data_files=local_path, split="train", num_proc=1)
+                print(f"Attempting to load JSONL with streaming=True to save disk space...")
+                dataset = datasets.load_dataset("json", data_files=local_path, split="train", streaming=True)
             else:
                 dataset = datasets.load_from_disk(local_path)
         except Exception as e:
