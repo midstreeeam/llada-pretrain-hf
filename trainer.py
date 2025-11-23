@@ -321,6 +321,26 @@ class MultipleLossTrainer(Trainer):
     def __init__(self, keys_you_want_to_log=[] ,*args, **kwargs):
         super().__init__(*args, **kwargs)
         self.keys_you_want_to_log = keys_you_want_to_log
+    
+    def save_model(self, output_dir: Optional[str] = None, _internal_call: bool = False):
+        """
+        Override save_model to force safe_serialization=False to handle shared tensors.
+        """
+        if output_dir is None:
+            output_dir = self.args.output_dir
+
+        if is_sagemaker_mp_enabled():
+            output_dir = os.path.join(output_dir, "opt_model")
+
+        # Force safe_serialization=False
+        self.model.save_pretrained(output_dir, safe_serialization=False)
+        
+        # Save tokenizer if available
+        if self.tokenizer is not None:
+            self.tokenizer.save_pretrained(output_dir)
+
+        # Save training arguments
+        torch.save(self.args, os.path.join(output_dir, TRAINING_ARGS_NAME))
 
     def compute_loss(
         self,
