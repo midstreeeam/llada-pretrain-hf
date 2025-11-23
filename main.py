@@ -402,6 +402,7 @@ def main():
         disable_tqdm=args.disable_tqdm,
         remove_unused_columns=False,
         ddp_find_unused_parameters=False,
+        safe_serialization=False,
         # eval_on_start = True,
     )
     callbacks = [MetricsLoggerCallback(), lazy_prob_scheduler_callback]

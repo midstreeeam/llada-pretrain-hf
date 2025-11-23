@@ -61,3 +61,6 @@ ensure_dirs:
   - "{repo_dir}/hf_cache/hub"
 
 extra_args: []
+
+
+# torchrun --nproc_per_node=2 training_launcher.py --config training_config/llada_135m_phase2.yaml --repo-dir .
