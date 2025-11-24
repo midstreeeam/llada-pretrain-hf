@@ -21,7 +21,7 @@ main_args:
   per_device_eval_batch_size: 32
   gradient_accumulation_steps: 1
 
-  max_length: 512
+  max_length: 1024
   mlm_start_prob: 0.75
   mlm_end_prob: 0.15
   mlm_schedule_type: random
