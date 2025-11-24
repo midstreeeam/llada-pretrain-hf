@@ -229,3 +229,24 @@ def smollm(local_path):
         raise ValueError("Remote loading is disabled for smollm. Please ensure local path is correct.")
 
     return dataset
+
+@register_dataset()
+def fineweb_edu_dedup(local_path):
+    """加载 FineWeb Edu Dedup 数据集 (SmolLM subset)"""
+    if local_path is not None and os.path.exists(local_path):
+        print(f"从本地路径加载数据集 'fineweb_edu_dedup': {local_path}")
+        try:
+            if os.path.isfile(local_path):
+                print(f"Loading JSONL file (non-streaming)...")
+                dataset = datasets.load_dataset("json", data_files=local_path, split="train", num_proc=64)
+            else:
+                dataset = datasets.load_from_disk(local_path)
+        except Exception as e:
+            print(f"本地加载失败: {e}")
+            raise ValueError(f"Failed to load local dataset and remote loading is disabled: {e}")
+    else:
+        print("从远程加载数据集 'fineweb_edu_dedup': HuggingFaceTB/smollm-corpus (fineweb-edu-dedup)")
+        # Fallback to remote if needed, but usually we want local for speed/stability
+        dataset = datasets.load_dataset("HuggingFaceTB/smollm-corpus", "fineweb-edu-dedup", split="train", num_proc=64)
+    
+    return dataset
