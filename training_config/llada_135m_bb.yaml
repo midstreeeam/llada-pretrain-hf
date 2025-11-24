@@ -33,7 +33,7 @@ main_args:
   save_total_limit: 3
 
   seed: 42
-  dataloader_num_workers: 2
+  dataloader_num_workers: 16
   disable_tqdm: true
 
   generation_interval: 2000
