@@ -67,6 +67,11 @@ def main() -> None:
         default="fineweb-edu-dedup",
         help="Dataset configuration/subset name.",
     )
+    parser.add_argument(
+        "--use-mirror",
+        action="store_true",
+        help="Use hf-mirror.com for downloading.",
+    )
     args = parser.parse_args()
 
     out_dir = Path(args.out_dir).resolve()
@@ -80,7 +85,7 @@ def main() -> None:
         print(f"[mode] Using percent mode: {args.percent}% of {args.dataset} ({args.config})")
 
         # Ensure we use an HF mirror if no endpoint is configured.
-        if "HF_ENDPOINT" not in os.environ and "HF_HUB_ENDPOINT" not in os.environ and "HF_HUB_BASE_URL" not in os.environ:
+        if args.use_mirror and "HF_ENDPOINT" not in os.environ and "HF_HUB_ENDPOINT" not in os.environ and "HF_HUB_BASE_URL" not in os.environ:
             mirror = "https://hf-mirror.com"
             os.environ["HF_ENDPOINT"] = mirror
             os.environ["HF_HUB_ENDPOINT"] = mirror
@@ -172,8 +177,10 @@ def main() -> None:
     print(f"[download] Target directory     : {out_dir}")
     print(f"[download] Max raw text bytes   : {max_bytes}")
 
+    print(f"[download] Max raw text bytes   : {max_bytes}")
+
     # Ensure we use an HF mirror if no endpoint is configured.
-    if "HF_ENDPOINT" not in os.environ and "HF_HUB_ENDPOINT" not in os.environ and "HF_HUB_BASE_URL" not in os.environ:
+    if args.use_mirror and "HF_ENDPOINT" not in os.environ and "HF_HUB_ENDPOINT" not in os.environ and "HF_HUB_BASE_URL" not in os.environ:
         mirror = "https://hf-mirror.com"
         os.environ["HF_ENDPOINT"] = mirror
         os.environ["HF_HUB_ENDPOINT"] = mirror
