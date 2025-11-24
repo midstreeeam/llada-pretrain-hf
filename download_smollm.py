@@ -5,7 +5,7 @@ and configure this repo to use it as the local source.
 
 Usage (from repo root):
   python download_smollm.py \
-    --out-dir ./data/smollm_20g \
+    --out-dir ./data/fineweb_edu_dedup_20g \
     --max-bytes 20GiB
 """
 
@@ -232,25 +232,25 @@ def main() -> None:
     print(f"[build] Final subset: {num_examples} examples, ~{total_bytes/2**30:.2f} GiB of text")
     print(f"[build] Saved/updated JSONL at {jsonl_path}")
 
-    # # Update diffusion/dataset_config.json so `smollm` uses this path.
-    # cfg_dir = Path("diffusion")
-    # cfg_dir.mkdir(parents=True, exist_ok=True)
-    # cfg_path = cfg_dir / "dataset_config.json"
+    # Update diffusion/dataset_config.json so `smollm` uses this path.
+    cfg_dir = Path("diffusion")
+    cfg_dir.mkdir(parents=True, exist_ok=True)
+    cfg_path = cfg_dir / "dataset_config.json"
 
-    # if cfg_path.exists():
-    #     with cfg_path.open("r", encoding="utf-8") as f:
-    #         cfg = json.load(f)
-    # else:
-    #     cfg = {}
-    # local_paths = cfg.get("local_paths", {})
-    # local_paths["smollm"] = str(jsonl_path)
-    # cfg["local_paths"] = local_paths
+    if cfg_path.exists():
+        with cfg_path.open("r", encoding="utf-8") as f:
+            cfg = json.load(f)
+    else:
+        cfg = {}
+    local_paths = cfg.get("local_paths", {})
+    local_paths["fineweb_edu_dedup"] = str(jsonl_path)
+    cfg["local_paths"] = local_paths
 
-    # with cfg_path.open("w", encoding="utf-8") as f:
-    #     json.dump(cfg, f, ensure_ascii=False, indent=2)
+    with cfg_path.open("w", encoding="utf-8") as f:
+        json.dump(cfg, f, ensure_ascii=False, indent=2)
 
-    # print(f"[config] Updated {cfg_path} with smollm -> {out_dir}")
-    # print("[done] You can now train with dataset_name=smollm without remote download.")
+    print(f"[config] Updated {cfg_path} with fineweb_edu_dedup -> {out_dir}")
+    print("[done] You can now train with dataset_name=fineweb_edu_dedup without remote download.")
 
 
 if __name__ == "__main__":
