@@ -8,46 +8,40 @@ env:
 
 main_args:
   model_name_or_path: answerdotai/ModernBERT-base
-  dataset_name: fineweb_edu_dedup
+  dataset_name: tinystories
   validation_dataset_name: none
-  output_dir: "{repo_dir}/output/llada_135m_bb"
-  config_path: "{repo_dir}/model_config/llada_135m.json"
+  output_dir: "{repo_dir}/output/llada_40m_norm2"
+  config_path: "{repo_dir}/model_config/llada_40m.json"
   mode: llada
-
-  num_train_epochs: 3
-  learning_rate: 0.0006
-
-  per_device_train_batch_size: 16
-  per_device_eval_batch_size: 16
+  num_train_epochs: 10
+  learning_rate: 0.0007
+  per_device_train_batch_size: 32
+  per_device_eval_batch_size: 32
   gradient_accumulation_steps: 1
-
-  max_length: 1024
-  mlm_start_prob: 0.75
+  max_length: 512
+  mlm_start_prob: 0.85
   mlm_end_prob: 0.15
   mlm_schedule_type: random
-  # loss_normalization: total_tokens
   warmup_ratio: 0.05
-
   logging_steps: 100
-  save_steps: 5000
+  save_steps: 20000
   eval_steps: 1000
   save_total_limit: 3
-
   seed: 42
-  dataloader_num_workers: 16
+  dataloader_num_workers: 2
   disable_tqdm: true
-
   generation_interval: 2000
-  generation_max_new_tokens: 128
-  generation_num_diffusion_steps: 128
+  generation_max_new_tokens: 64
+  generation_num_diffusion_steps: 32
   generation_temperature: 1.0
-  generation_block_size: 128
+  generation_block_size: 8
   generation_decode_top_k: 0
   generation_remask_strategy: low_confidence
   generation_prompts:
-    - "Sir Isaac Newton was an English polymath active as a mathematician, physicist, astronomer, alchemist, theologian, author, and inventor. He was "
-
+    - "Once upon a time,"
+    - "In a quiet village by the sea,"
   resume_from_checkpoint: null
+  loss_normalization: total_tokens
 
 flags:
   - bf16
@@ -60,5 +54,3 @@ ensure_dirs:
   - "{repo_dir}/hf_cache/hub"
 
 extra_args: []
-
-# torchrun --nproc_per_node=2 training_launcher.py --config training_config/llada_135m_bb.yaml --repo-dir .

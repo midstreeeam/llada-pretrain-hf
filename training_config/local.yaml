@@ -35,6 +35,7 @@ main_args:
     - "Once upon a time, a curious child asked:"
     - "In a quiet village by the sea,"
   resume_from_checkpoint: "{repo_dir}/output/llada_100m_tinystories/checkpoint-200"
+  loss_normalization: total_tokens
 
 flags:
   - bf16

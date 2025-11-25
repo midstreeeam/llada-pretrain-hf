@@ -314,6 +314,13 @@ class ModelConfig():
     substantially.
     """
 
+    loss_normalization: str = "masked_tokens"
+    """
+    The normalization method for the loss.
+    "masked_tokens": Normalize by the number of masked tokens (default, old behavior).
+    "total_tokens": Normalize by the total number of tokens in the batch (official behavior).
+    """
+
     weight_tying: bool = True
     """
     Whether to tie output linear weights to the input embedding.

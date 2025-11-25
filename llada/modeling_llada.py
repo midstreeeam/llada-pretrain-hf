@@ -1399,6 +1399,7 @@ def ForMaskedLMLoss(
     ignore_index: int = -100,
     # 新增参数，用于接收 per-token 的权重
     per_token_weights: Optional[torch.Tensor] = None,
+    loss_normalization: str = "masked_tokens",
     **kwargs,
 ):
     """
@@ -1462,10 +1463,17 @@ def ForMaskedLMLoss(
     
     # 求和并归一化
     total_weighted_loss = weighted_loss.sum()
-    if num_valid_tokens > 0:
-        final_loss = total_weighted_loss / num_valid_tokens
+    
+    if loss_normalization == "total_tokens":
+        # Normalize by total number of tokens (official implementation behavior)
+        num_total_tokens = labels.numel()
+        final_loss = total_weighted_loss / num_total_tokens
     else:
-        final_loss = torch.tensor(0.0, device=logits.device)
+        # Normalize by number of valid (masked) tokens (old behavior)
+        if num_valid_tokens > 0:
+            final_loss = total_weighted_loss / num_valid_tokens
+        else:
+            final_loss = torch.tensor(0.0, device=logits.device)
 
     return final_loss
 
@@ -1556,7 +1564,14 @@ class LLaDAModelLM(PreTrainedModel):
 
 
 
-            loss = ForMaskedLMLoss(logits, labels, vocab_size=self.config.vocab_size,per_token_weights=per_token_mlm_weights,**kwargs)
+            loss = ForMaskedLMLoss(
+                logits, 
+                labels, 
+                vocab_size=self.config.vocab_size,
+                per_token_weights=per_token_mlm_weights,
+                loss_normalization=getattr(self.config, "loss_normalization", "masked_tokens"),
+                **kwargs
+            )
             
             
         if not return_dict:

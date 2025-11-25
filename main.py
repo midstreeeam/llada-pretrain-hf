@@ -206,6 +206,8 @@ def main():
     parser.add_argument("--mlm_end_prob", type=float, default=0.15)
     parser.add_argument("--mlm_schedule_type", type=str, default='cosine')
     parser.add_argument("--tail_bias_factor", type=float, default=1.5)
+    parser.add_argument("--loss_normalization", type=str, default="masked_tokens", choices=["masked_tokens", "total_tokens"],
+                        help="Loss normalization method: 'masked_tokens' (old) or 'total_tokens' (official).")
 
     # 数据处理参数
     parser.add_argument("--max_length", type=int, default=512, help="输入序列的最大长度。")
@@ -349,6 +351,10 @@ def main():
 
     if args.mode == 'llada':
         config = LLaDAConfig.from_pretrained(args.config_path)
+        # Override config with command line argument
+        if hasattr(args, "loss_normalization"):
+            config.loss_normalization = args.loss_normalization
+            
         if args.init_model_from_checkpoint:
             if is_main_process():
                 logging.info(f"Loading model weights from {args.init_model_from_checkpoint}")
