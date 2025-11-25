@@ -387,7 +387,7 @@ def main():
         learning_rate=args.learning_rate,
         num_train_epochs=args.num_train_epochs,
         lr_scheduler_type="cosine_with_min_lr",
-        lr_scheduler_kwargs={'min_lr_rate': 0.01},
+        lr_scheduler_kwargs={'min_lr_rate': 0.33},
         warmup_ratio=args.warmup_ratio,
         save_strategy="steps",
         save_steps=args.save_steps,
