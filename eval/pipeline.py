@@ -20,6 +20,10 @@ from transformers import AutoTokenizer
 
 from generation import run_diffusion_generation
 from llada.modeling_llada import LLaDAModelLM
+from llada.configuration_llada import LLaDAConfig
+from transformers import AutoConfig
+
+AutoConfig.register("llada", LLaDAConfig)
 from eval.perplexity import (
     PerplexityJobConfig,
     load_texts_from_dataset,

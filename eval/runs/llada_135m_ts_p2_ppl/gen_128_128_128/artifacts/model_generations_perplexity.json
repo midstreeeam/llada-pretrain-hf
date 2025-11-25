@@ -1,0 +1,13 @@
+{
+  "total_sequences": 256,
+  "total_tokens": 30681,
+  "total_neg_log_likelihood": 65402.0,
+  "mean_per_token_nll": 2.1316775854763534,
+  "perplexity": 8.42899531736314,
+  "metadata": {
+    "judge_model": "Qwen/Qwen3-1.7B",
+    "dtype": "torch.bfloat16",
+    "device": "cuda",
+    "max_context_length": 512
+  }
+}

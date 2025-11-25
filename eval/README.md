@@ -13,17 +13,18 @@ with a reference LM (judge) to compute cross-model perplexity.
 ## Quick start
 
 ```bash
-PYTHONPATH=$(pwd) python eval/pipeline.py \
-  --student-checkpoint output/llada_135m_ts/checkpoint-662420 \
+PYTHONPATH=$(pwd) python3 eval/pipeline.py \
+  --student-checkpoint output/llada_135m_ts_p2/checkpoint-331210 \
+  --student-tokenizer answerdotai/ModernBERT-base \
   --judge-model Qwen/Qwen3-1.7B \
-  --output-dir eval/runs/llada_135m_ts_ppl \
+  --output-dir eval/runs/llada_135m_ts_p2_ppl \
   --generation-num-prompts 256 \
   --generation-max-new-tokens 128 \
-  --generation-diffusion-steps 8 \
+  --generation-diffusion-steps 128 \
   --generation-block-size 128 \
   --judge-batch-size 2 \
   --judge-max-context 512 \
-  --reference-split train[:2000] \
+  --reference-split "train[:2000]" \
   --reference-max-samples 100
 ```
 
