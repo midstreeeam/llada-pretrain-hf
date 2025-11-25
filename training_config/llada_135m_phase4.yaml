@@ -1,0 +1,68 @@
+env:
+  HF_ENDPOINT: https://hf-mirror.com
+  HF_HOME: "{repo_dir}/hf_cache"
+  TRANSFORMERS_CACHE: "{repo_dir}/hf_cache/transformers"
+  HF_DATASETS_CACHE: "{repo_dir}/hf_cache/datasets"
+  HUGGINGFACE_HUB_CACHE: "{repo_dir}/hf_cache/hub"
+  PIP_INDEX_URL: https://pypi.tuna.tsinghua.edu.cn/simple
+
+main_args:
+  model_name_or_path: answerdotai/ModernBERT-base
+  dataset_name: fineweb_edu_dedup
+  validation_dataset_name: none
+  output_dir: "{repo_dir}/output/llada_135m_phase4"
+  config_path: "{repo_dir}/model_config/llada_135m.json"
+  mode: llada
+
+  num_train_epochs: 1
+  learning_rate: 0.00005
+
+  per_device_train_batch_size: 32
+  per_device_eval_batch_size: 32
+  gradient_accumulation_steps: 1
+
+  max_length: 512
+  mlm_start_prob: 0.7
+  mlm_end_prob: 0.1
+  mlm_schedule_type: random
+  warmup_ratio: 0.05
+
+  logging_steps: 100
+  save_steps: 5000
+  eval_steps: 1000
+  save_total_limit: 3
+
+  seed: 42
+  dataloader_num_workers: 4
+  disable_tqdm: true
+
+  generation_interval: 2000
+  generation_max_new_tokens: 64
+  generation_num_diffusion_steps: 64
+  generation_temperature: 1.0
+  generation_block_size: 64
+  generation_decode_top_k: 0
+  generation_remask_strategy: low_confidence
+  generation_prompts:
+    - "Sir Isaac Newton was "
+    - "Once upon a time, there was a girl named Lily. She had a flute that she loved to play. One day,"
+    - "Parents are usually the first to recognize that their child has a problem with emotions or behavior. Still, the decision to seek professional help can be difficult and painful for a parent."
+  resume_from_checkpoint: null
+
+  init_model_from_checkpoint: "{repo_dir}/output/llada_135m_phase3/checkpoint-66242"
+  loss_normalization: total_token
+
+flags:
+  - bf16
+
+ensure_dirs:
+  - "{output_dir}"
+  - "{repo_dir}/hf_cache"
+  - "{repo_dir}/hf_cache/transformers"
+  - "{repo_dir}/hf_cache/datasets"
+  - "{repo_dir}/hf_cache/hub"
+
+extra_args: []
+
+
+# torchrun --nproc_per_node=2 training_launcher.py --config training_config/llada_135m_phase4.yaml --repo-dir .
