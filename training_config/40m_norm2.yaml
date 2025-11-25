@@ -39,7 +39,7 @@ main_args:
   generation_remask_strategy: low_confidence
   generation_prompts:
     - "Once upon a time,"
-    - "In a quiet village by the sea,"
+    - "Once upon a time, there was a girl named Lily. She had a flute that she loved to play. One day,"
   resume_from_checkpoint: null
   loss_normalization: total_tokens
 
