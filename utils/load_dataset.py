@@ -250,3 +250,19 @@ def fineweb_edu_dedup(local_path):
         dataset = datasets.load_dataset("HuggingFaceTB/smollm-corpus", "fineweb-edu-dedup", split="train", num_proc=64)
     
     return dataset
+
+@register_dataset()
+def tinystories_validation(local_path):
+    """Load TinyStories validation set"""
+    if local_path is not None and os.path.exists(local_path):
+        print(f"从本地路径加载验证集 'tinystories_validation': {local_path}")
+        try:
+            dataset = datasets.load_from_disk(local_path)
+        except Exception as e:
+            print(f"本地加载失败: {e}, 尝试远程加载")
+            dataset = datasets.load_dataset("roneneldan/TinyStories", num_proc=64)['validation']
+    else:
+        print("从远程加载验证集 'tinystories_validation': roneneldan/TinyStories")
+        dataset = datasets.load_dataset("roneneldan/TinyStories", num_proc=64)['validation']
+
+    return dataset
