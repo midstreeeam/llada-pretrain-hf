@@ -1,0 +1,65 @@
+env:
+  HF_ENDPOINT: https://hf-mirror.com
+  HF_HOME: "{repo_dir}/hf_cache"
+  TRANSFORMERS_CACHE: "{repo_dir}/hf_cache/transformers"
+  HF_DATASETS_CACHE: "{repo_dir}/hf_cache/datasets"
+  HUGGINGFACE_HUB_CACHE: "{repo_dir}/hf_cache/hub"
+  PIP_INDEX_URL: https://pypi.tuna.tsinghua.edu.cn/simple
+
+main_args:
+  model_name_or_path: answerdotai/ModernBERT-base
+  dataset_name: fineweb_edu_dedup
+  validation_dataset_name: null
+  output_dir: "{repo_dir}/output/llada_135m_ts_test"
+  config_path: "{repo_dir}/model_config/llada_135m.json"
+  mode: llada
+
+  num_train_epochs: 15
+  learning_rate: 0.0005
+
+  per_device_train_batch_size: 32
+  per_device_eval_batch_size: 32
+  gradient_accumulation_steps: 1
+
+  max_length: 512
+  mlm_start_prob: 0.9
+  mlm_end_prob: 0.1
+  mlm_schedule_type: random
+  warmup_ratio: 0.05
+
+  logging_steps: 100
+  save_steps: 5000
+  eval_steps: 1000
+  save_total_limit: 3
+
+  seed: 42
+  dataloader_num_workers: 2
+  disable_tqdm: true
+
+  generation_interval: 2000
+  generation_max_new_tokens: 128
+  generation_num_diffusion_steps: 128
+  generation_temperature: 1.0
+  generation_block_size: 128
+  generation_decode_top_k: 0
+  generation_remask_strategy: low_confidence
+  generation_prompts:
+    - "Once upon a time, there was a girl named Lily. She had a flute that she loved to play. One day,"
+    - "Once upon a time, "
+
+  resume_from_checkpoint: null
+  loss_normalization: total_tokens
+
+flags:
+  - bf16
+
+ensure_dirs:
+  - "{output_dir}"
+  - "{repo_dir}/hf_cache"
+  - "{repo_dir}/hf_cache/transformers"
+  - "{repo_dir}/hf_cache/datasets"
+  - "{repo_dir}/hf_cache/hub"
+
+extra_args: []
+
+# torchrun --nproc_per_node=2 training_launcher.py --config training_config/llada_135m_ts_test.yaml --repo-dir .
