@@ -15,7 +15,7 @@ main_args:
   mode: llada
 
   num_train_epochs: 1
-  learning_rate: 0.0006
+  learning_rate: 0.00015
 
   per_device_train_batch_size: 32
   per_device_eval_batch_size: 32
@@ -33,17 +33,18 @@ main_args:
   save_total_limit: 3
 
   seed: 42
-  dataloader_num_workers: 2
+  dataloader_num_workers: 4
   disable_tqdm: true
 
   generation_interval: 2000
-  generation_max_new_tokens: 128
-  generation_num_diffusion_steps: 128
+  generation_max_new_tokens: 64
+  generation_num_diffusion_steps: 1
   generation_temperature: 1.0
-  generation_block_size: 128
+  generation_block_size: 64
   generation_decode_top_k: 0
   generation_remask_strategy: low_confidence
   generation_prompts:
+    - "Sir Isaac Newton was "
     - "Sir Isaac Newton was an English polymath active as a mathematician, physicist, astronomer, alchemist, theologian, author, and inventor. He was "
 
   resume_from_checkpoint: null

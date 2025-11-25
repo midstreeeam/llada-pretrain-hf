@@ -28,7 +28,7 @@ main_args:
   eval_steps: 1000
   save_total_limit: 3
   seed: 42
-  dataloader_num_workers: 2
+  dataloader_num_workers: 4
   disable_tqdm: true
   generation_interval: 2000
   generation_max_new_tokens: 64
