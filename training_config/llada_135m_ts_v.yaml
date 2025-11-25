@@ -22,8 +22,8 @@ main_args:
   gradient_accumulation_steps: 1
 
   max_length: 512
-  mlm_start_prob: 0.85
-  mlm_end_prob: 0.15
+  mlm_start_prob: 0.9
+  mlm_end_prob: 0.1
   mlm_schedule_type: random
   warmup_ratio: 0.05
 
@@ -45,6 +45,7 @@ main_args:
   generation_remask_strategy: low_confidence
   generation_prompts:
     - "Once upon a time, there was a girl named Lily. She had a flute that she loved to play. One day,"
+    - "Once upon a time, "
 
   resume_from_checkpoint: null
   loss_normalization: total_tokens
