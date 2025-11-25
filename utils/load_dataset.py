@@ -128,11 +128,11 @@ def finefineweb_validation(local_path):
     if local_path is not None and os.path.exists(local_path):
         print(f"从本地路径加载数据集 'finefineweb_validation': {local_path}")
         # 假设本地路径也是一个标准的Hugging Face数据集目录
-        dataset = datasets.load_dataset(local_path, num_proc=64,split='train[:50%]')
+        dataset = datasets.load_dataset(local_path, num_proc=64,split='train[:10%]')
     else:
         print("从远程加载数据集 'finefineweb_validation'")
         # 加载指定的验证集
-        dataset = datasets.load_dataset("m-a-p/FineFineWeb-validation", num_proc=64,split='train[:50%]')
+        dataset = datasets.load_dataset("m-a-p/FineFineWeb-validation", num_proc=64,split='train[:10%]')
     
     return dataset
 # <<< END ADDED >>>
