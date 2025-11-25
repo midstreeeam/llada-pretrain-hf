@@ -50,7 +50,7 @@ main_args:
   resume_from_checkpoint: null
 
   init_model_from_checkpoint: "{repo_dir}/output/llada_135m_phase3/checkpoint-66242"
-  loss_normalization: total_token
+  loss_normalization: total_tokens
 
 flags:
   - bf16
