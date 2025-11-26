@@ -28,5 +28,5 @@ mkdir -p logs
 
 # Run training
 torchrun --nproc_per_node=8 training_launcher.py \
-    --config training_config/llada_135m_bb.yaml \
+    --config training_config/llada_135m_bb_p2.yaml \
     --repo-dir .
