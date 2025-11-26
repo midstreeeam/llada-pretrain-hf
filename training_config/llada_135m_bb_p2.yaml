@@ -49,7 +49,7 @@ main_args:
     - "He was"
     - "Parents are usually the first to recognize that their child has a problem with emotions or behavior. Still, the decision to seek professional help can be difficult and painful for a parent."
   resume_from_checkpoint: null
-  init_model_from_checkpoint: "{repo_dir}/output/llada_135m_bb/"  
+  init_model_from_checkpoint: "{repo_dir}/output/llada_135m_bb/checkpoint-445000"  
 
 flags:
   - bf16
