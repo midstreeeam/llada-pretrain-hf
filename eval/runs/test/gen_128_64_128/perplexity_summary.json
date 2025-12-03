@@ -2,28 +2,28 @@
   "student_checkpoint": "output/llada_135m_ts_p2/checkpoint-331210",
   "student_tokenizer": "answerdotai/ModernBERT-base",
   "judge_model": "Qwen/Qwen3-1.7B",
-  "generation_tag": "gen_128_128_128",
-  "timestamp": "2025-11-30T19:03:47.555727",
+  "generation_tag": "gen_128_64_128",
+  "timestamp": "2025-11-30T19:07:01.029398",
   "artifacts": {
-    "generation_jsonl": "eval/runs/test/gen_128_128_128/artifacts/model_generations.jsonl",
-    "model_ppl_summary": "eval/runs/test/gen_128_128_128/artifacts/model_generations_perplexity.json",
-    "model_ppl_details": "eval/runs/test/gen_128_128_128/artifacts/model_generations_perplexity.jsonl",
-    "reference_ppl_summary": "eval/runs/test/gen_128_128_128/artifacts/reference_perplexity.json",
-    "reference_ppl_details": "eval/runs/test/gen_128_128_128/artifacts/reference_perplexity.jsonl"
+    "generation_jsonl": "eval/runs/test/gen_128_64_128/artifacts/model_generations.jsonl",
+    "model_ppl_summary": "eval/runs/test/gen_128_64_128/artifacts/model_generations_perplexity.json",
+    "model_ppl_details": "eval/runs/test/gen_128_64_128/artifacts/model_generations_perplexity.jsonl",
+    "reference_ppl_summary": "eval/runs/test/gen_128_64_128/artifacts/reference_perplexity.json",
+    "reference_ppl_details": "eval/runs/test/gen_128_64_128/artifacts/reference_perplexity.jsonl"
   },
   "generation_metadata": {
     "num_prompts": 256,
     "records_written": 256,
-    "output_path": "eval/runs/test/gen_128_128_128/artifacts/model_generations.jsonl",
+    "output_path": "eval/runs/test/gen_128_64_128/artifacts/model_generations.jsonl",
     "device": "cuda",
     "dtype": "torch.float16"
   },
   "model_perplexity": {
     "total_sequences": 256,
-    "total_tokens": 30683,
-    "total_neg_log_likelihood": 65240.0,
-    "mean_per_token_nll": 2.126258840400222,
-    "perplexity": 8.383444266714953,
+    "total_tokens": 30673,
+    "total_neg_log_likelihood": 75583.0,
+    "mean_per_token_nll": 2.4641541420793533,
+    "perplexity": 11.753536124483809,
     "metadata": {
       "judge_model": "Qwen/Qwen3-1.7B",
       "dtype": "torch.bfloat16",

@@ -306,15 +306,34 @@ def main():
 
 
     # --- 4. 加载数据集和分词器 ---
+    # Load datasets with distributed awareness to prevent race conditions
+    import torch.distributed as dist
+    
+    # Only rank 0 loads the dataset first to avoid file locking issues
     if is_main_process():
         logging.info(f"加载训练数据集 '{args.dataset_name}'...")
-    train_dataset = get_dataset(args.dataset_name)
+        train_dataset = get_dataset(args.dataset_name)
+    
+    # Wait for rank 0 to finish loading
+    if dist.is_available() and dist.is_initialized():
+        dist.barrier()
+    
+    # Other ranks load the dataset (should hit cache)
+    if not is_main_process():
+        train_dataset = get_dataset(args.dataset_name)
 
     eval_dataset = None
     if args.validation_dataset_name and args.validation_dataset_name.lower() not in ("", "none"):
         if is_main_process():
             logging.info(f"加载验证数据集 '{args.validation_dataset_name}'...")
-        eval_dataset = get_dataset(args.validation_dataset_name)
+            eval_dataset = get_dataset(args.validation_dataset_name)
+        
+        # Wait for rank 0 to finish loading validation set
+        if dist.is_available() and dist.is_initialized():
+            dist.barrier()
+        
+        if not is_main_process():
+            eval_dataset = get_dataset(args.validation_dataset_name)
 
 
     evaluation_strategy = args.evaluation_strategy

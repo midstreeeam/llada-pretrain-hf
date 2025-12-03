@@ -1,9 +1,9 @@
 {
   "total_sequences": 256,
-  "total_tokens": 30683,
-  "total_neg_log_likelihood": 65240.0,
-  "mean_per_token_nll": 2.126258840400222,
-  "perplexity": 8.383444266714953,
+  "total_tokens": 30160,
+  "total_neg_log_likelihood": 99212.0,
+  "mean_per_token_nll": 3.2895225464190982,
+  "perplexity": 26.830050493612916,
   "metadata": {
     "judge_model": "Qwen/Qwen3-1.7B",
     "dtype": "torch.bfloat16",
