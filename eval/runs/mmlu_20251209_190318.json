@@ -1,0 +1,13 @@
+{
+  "overall_accuracy": 0.25,
+  "macro_accuracy": 0.25,
+  "total_questions": 4,
+  "shots": 5,
+  "split": "dev",
+  "model_path": "output/llada_135m_bb_p2/checkpoint-165000",
+  "tokenizer_path": "answerdotai/ModernBERT-base",
+  "timestamp": "2025-12-09T19:03:18.949649Z",
+  "subject_accuracies": {
+    "abstract_algebra": 0.25
+  }
+}
